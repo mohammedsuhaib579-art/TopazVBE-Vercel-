@@ -1,9 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import type { Decisions } from "../lib/types";
+import type { Decisions, ProductAreaKey } from "../lib/types";
 import { PRODUCTS, AREAS, MIN_ASSEMBLY_TIME, MIN_MANAGEMENT_BUDGET, ASSEMBLY_MIN_WAGE_RATE, MIN_SALES_SALARY_PER_QUARTER, SUPPLIERS, MACHINE_HOURS_PER_SHIFT, MACHINISTS_PER_MACHINE } from "../lib/constants";
 import { makeKey } from "../lib/types";
+
+// Helper to create empty advertising/deliveries object with all ProductAreaKey combinations
+function createProductAreaRecord(defaultValue: number = 0): Record<ProductAreaKey, number> {
+  const result: Partial<Record<ProductAreaKey, number>> = {};
+  for (const product of PRODUCTS) {
+    for (const area of AREAS) {
+      result[makeKey(product, area)] = defaultValue;
+    }
+  }
+  return result as Record<ProductAreaKey, number>;
+}
 
 interface DecisionFormProps {
   companyName: string;
@@ -55,7 +66,7 @@ export default function DecisionForm({
     vans_to_sell: 0,
     buy_competitor_info: false,
     buy_market_shares: false,
-    deliveries: {},
+    deliveries: createProductAreaRecord(0),
     product_development: { "Product 1": 0, "Product 2": 0, "Product 3": 0 },
     recruit_sales: 0,
     dismiss_sales: 0,
@@ -68,34 +79,10 @@ export default function DecisionForm({
     materials_num_deliveries: 1,
     machines_to_sell: 0,
     machines_to_order: 0,
-    advertising_trade_press: {},
-    advertising_support: {},
-    advertising_merchandising: {},
+    advertising_trade_press: createProductAreaRecord(5000),
+    advertising_support: createProductAreaRecord(5000),
+    advertising_merchandising: createProductAreaRecord(5000),
   });
-
-  // Initialize advertising keys
-  if (!decisions.advertising_trade_press || Object.keys(decisions.advertising_trade_press).length === 0) {
-    const adv: Record<string, number> = {};
-    for (const product of PRODUCTS) {
-      for (const area of AREAS) {
-        adv[makeKey(product, area)] = 5000;
-      }
-    }
-    decisions.advertising_trade_press = adv;
-    decisions.advertising_support = { ...adv };
-    decisions.advertising_merchandising = { ...adv };
-  }
-
-  // Initialize deliveries
-  if (!decisions.deliveries || Object.keys(decisions.deliveries).length === 0) {
-    const del: Record<string, number> = {};
-    for (const product of PRODUCTS) {
-      for (const area of AREAS) {
-        del[makeKey(product, area)] = 0;
-      }
-    }
-    decisions.deliveries = del;
-  }
 
   const updateDecision = <K extends keyof Decisions>(key: K, value: Decisions[K]) => {
     setDecisions((prev) => ({ ...prev, [key]: value }));
