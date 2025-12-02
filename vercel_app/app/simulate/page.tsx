@@ -182,32 +182,28 @@ export default function SimulatePage() {
         setError(data.error || "Simulation did not return valid results.");
       } else {
         setReports(data.reports);
-        // Extract economy info from reports and update current quarter tracking
-        if (data.reports.length > 0) {
-          const firstReport = data.reports[0];
-          // Update tracked quarter (this is the quarter that just ran)
-          setCurrentQuarter(firstReport.quarter);
-          setCurrentYear(firstReport.year);
-          
-          // Calculate next quarter for economy display
-          let nextQuarter = firstReport.quarter + 1;
-          let nextYear = firstReport.year;
-          if (nextQuarter > 4) {
-            nextQuarter = 1;
-            nextYear += 1;
-          }
-          
-          setEconomy({
-            quarter: nextQuarter, // Show next quarter (what we're preparing for)
-            year: nextYear,
-            gdp: data.economy?.gdp ?? 100,
-            unemployment: data.economy?.unemployment ?? 5.0,
-            cb_rate: data.economy?.cb_rate ?? 5.0,
-            material_price: data.economy?.material_price ?? 100,
-          });
-        } else if (data.economy) {
-          setEconomy(data.economy);
+        
+        // Increment quarter tracking after successful quarter completion
+        // Calculate next quarter
+        let nextQuarter = currentQuarter + 1;
+        let nextYear = currentYear;
+        if (nextQuarter > 4) {
+          nextQuarter = 1;
+          nextYear += 1;
         }
+        
+        // Update to the next quarter (this becomes the current quarter for next decisions)
+        setCurrentQuarter(nextQuarter);
+        setCurrentYear(nextYear);
+        
+        setEconomy({
+          quarter: nextQuarter, // Next quarter we're preparing for
+          year: nextYear,
+          gdp: data.economy?.gdp ?? 100,
+          unemployment: data.economy?.unemployment ?? 5.0,
+          cb_rate: data.economy?.cb_rate ?? 5.0,
+          material_price: data.economy?.material_price ?? 100,
+        });
 
         // Update company states from reports
         const newStates = new Map();
@@ -306,14 +302,17 @@ export default function SimulatePage() {
             <div className="rounded-xl bg-slate-800 p-4">
               <div className="mb-2 text-xs font-semibold text-slate-300">Current Economy</div>
               <div className="space-y-1 text-xs text-slate-400">
-                <div>Preparing for: Year {economy.year}, Quarter {economy.quarter}</div>
-                {reports && (
-                  <div className="text-slate-500">Last completed: Year {currentYear}, Quarter {currentQuarter}</div>
-                )}
-                <div>GDP Index: {economy.gdp.toFixed(1)}</div>
-                <div>Unemployment: {economy.unemployment.toFixed(1)}%</div>
-                <div>Bank Rate: {economy.cb_rate.toFixed(2)}%</div>
-                <div>Material Price: £{economy.material_price.toFixed(1)}</div>
+                <div className="mb-2">
+                  <span className="text-slate-500">Current Quarter: </span>
+                  <span className="text-lg font-bold text-primary-400">Year {currentYear}, Quarter {currentQuarter}</span>
+                </div>
+                <div className="text-slate-500 text-xs">Preparing for: Year {economy.year}, Quarter {economy.quarter}</div>
+                <div className="mt-2 pt-2 border-t border-slate-700">
+                  <div>GDP Index: {economy.gdp.toFixed(1)}</div>
+                  <div>Unemployment: {economy.unemployment.toFixed(1)}%</div>
+                  <div>Bank Rate: {economy.cb_rate.toFixed(2)}%</div>
+                  <div>Material Price: £{economy.material_price.toFixed(1)}</div>
+                </div>
               </div>
             </div>
           )}
@@ -547,6 +546,7 @@ export default function SimulatePage() {
                 setSelectedPlayer(0);
                 // Scroll to top
                 window.scrollTo({ top: 0, behavior: 'smooth' });
+                // Note: Don't reset quarter tracking - it should continue incrementing
                 // Keep player selection locked for next quarter
               }}
               className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
