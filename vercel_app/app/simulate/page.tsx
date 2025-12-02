@@ -30,6 +30,10 @@ export default function SimulatePage() {
   const [reports, setReports] = useState<ManagementReport[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [economy, setEconomy] = useState<ApiResponse["economy"] | null>(null);
+  
+  // Track current quarter (persists across API calls)
+  const [currentQuarter, setCurrentQuarter] = useState(1);
+  const [currentYear, setCurrentYear] = useState(1);
 
   // Store decisions for all players
   const [allPlayerDecisions, setAllPlayerDecisions] = useState<Map<number, Decisions>>(new Map());
@@ -178,7 +182,30 @@ export default function SimulatePage() {
         setError(data.error || "Simulation did not return valid results.");
       } else {
         setReports(data.reports);
-        if (data.economy) {
+        // Extract economy info from reports and update current quarter tracking
+        if (data.reports.length > 0) {
+          const firstReport = data.reports[0];
+          // Update tracked quarter (this is the quarter that just ran)
+          setCurrentQuarter(firstReport.quarter);
+          setCurrentYear(firstReport.year);
+          
+          // Calculate next quarter for economy display
+          let nextQuarter = firstReport.quarter + 1;
+          let nextYear = firstReport.year;
+          if (nextQuarter > 4) {
+            nextQuarter = 1;
+            nextYear += 1;
+          }
+          
+          setEconomy({
+            quarter: nextQuarter, // Show next quarter (what we're preparing for)
+            year: nextYear,
+            gdp: data.economy?.gdp ?? 100,
+            unemployment: data.economy?.unemployment ?? 5.0,
+            cb_rate: data.economy?.cb_rate ?? 5.0,
+            material_price: data.economy?.material_price ?? 100,
+          });
+        } else if (data.economy) {
           setEconomy(data.economy);
         }
 
@@ -279,7 +306,10 @@ export default function SimulatePage() {
             <div className="rounded-xl bg-slate-800 p-4">
               <div className="mb-2 text-xs font-semibold text-slate-300">Current Economy</div>
               <div className="space-y-1 text-xs text-slate-400">
-                <div>Year {economy.year}, Quarter {economy.quarter}</div>
+                <div>Preparing for: Year {economy.year}, Quarter {economy.quarter}</div>
+                {reports && (
+                  <div className="text-slate-500">Last completed: Year {currentYear}, Quarter {currentQuarter}</div>
+                )}
                 <div>GDP Index: {economy.gdp.toFixed(1)}</div>
                 <div>Unemployment: {economy.unemployment.toFixed(1)}%</div>
                 <div>Bank Rate: {economy.cb_rate.toFixed(2)}%</div>
@@ -513,6 +543,10 @@ export default function SimulatePage() {
                 setError(null);
                 // Clear all saved decisions for the new quarter
                 setAllPlayerDecisions(new Map());
+                // Reset to Company 1 for the new quarter
+                setSelectedPlayer(0);
+                // Scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
                 // Keep player selection locked for next quarter
               }}
               className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
