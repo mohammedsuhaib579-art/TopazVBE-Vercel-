@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DecisionForm from "../../components/DecisionForm";
 import ManagementReportDisplay from "../../components/ManagementReport";
 import type { Decisions, ManagementReport } from "../../lib/types";
-import { Simulation } from "../../lib/simulation";
 
 type PlayerConfig = {
   humans: number;
@@ -26,37 +25,120 @@ type ApiResponse = {
 
 export default function SimulatePage() {
   const [config, setConfig] = useState<PlayerConfig>({ humans: 1 });
+  const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
+  const [playerLocked, setPlayerLocked] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [reports, setReports] = useState<ManagementReport[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [economy, setEconomy] = useState<ApiResponse["economy"] | null>(null);
 
-  // Create a default company state for the form (will be updated after first run)
-  const [companyState, setCompanyState] = useState({
-    name: "Company 1",
-    sharePrice: 1.0,
-    netWorth: 500_000,
-    cash: 200_000,
-    employees: 50,
-    machines: 10,
-    salespeople: 10,
-    assemblyWorkers: 40,
-    productStarRatings: { "Product 1": 3, "Product 2": 3, "Product 3": 3 },
-    productDevAccumulated: { "Product 1": 0, "Product 2": 0, "Product 3": 0 },
-    creditworthiness: 500_000,
-  });
+  // Store decisions for all players
+  const [allPlayerDecisions, setAllPlayerDecisions] = useState<Map<number, Decisions>>(new Map());
 
-  const handleRunQuarter = async (decisions: Decisions) => {
+  // Create default company states for all players
+  const [companyStates, setCompanyStates] = useState<Map<number, {
+    name: string;
+    sharePrice: number;
+    netWorth: number;
+    cash: number;
+    employees: number;
+    machines: number;
+    salespeople: number;
+    assemblyWorkers: number;
+    productStarRatings: Record<string, number>;
+    productDevAccumulated: Record<string, number>;
+    creditworthiness: number;
+  }>>(new Map());
+
+  // Initialize company states
+  useEffect(() => {
+    const states = new Map();
+    for (let i = 0; i < config.humans; i++) {
+      states.set(i, {
+        name: `Company ${i + 1}`,
+        sharePrice: 1.0,
+        netWorth: 500_000,
+        cash: 200_000,
+        employees: 50,
+        machines: 10,
+        salespeople: 10,
+        assemblyWorkers: 40,
+        productStarRatings: { "Product 1": 3, "Product 2": 3, "Product 3": 3 },
+        productDevAccumulated: { "Product 1": 0, "Product 2": 0, "Product 3": 0 },
+        creditworthiness: 500_000,
+      });
+    }
+    setCompanyStates(states);
+    // Reset player selection when number of players changes
+    if (config.humans > 1 && !playerLocked) {
+      setSelectedPlayer(null);
+      setAllPlayerDecisions(new Map());
+    }
+  }, [config.humans, playerLocked]);
+
+  // Auto-select player 0 for single player mode
+  useEffect(() => {
+    if (config.humans === 1 && selectedPlayer === null) {
+      setSelectedPlayer(0);
+      setPlayerLocked(true);
+    }
+  }, [config.humans, selectedPlayer]);
+
+  const handlePlayerSelect = (playerIdx: number) => {
+    if (!playerLocked) {
+      setSelectedPlayer(playerIdx);
+      setPlayerLocked(true);
+    }
+  };
+
+  const handleDecisionChange = (playerIdx: number, decisions: Decisions) => {
+    const newDecisions = new Map(allPlayerDecisions);
+    newDecisions.set(playerIdx, decisions);
+    setAllPlayerDecisions(newDecisions);
+  };
+
+  const handleRunQuarter = async (singlePlayerDecisions?: Decisions) => {
     setIsRunning(true);
     setReports(null);
     setError(null);
+
     try {
+      // Build decisions array - one per company
+      const decisionsArray: Decisions[] = [];
+      
+      if (config.humans === 1 && singlePlayerDecisions) {
+        // Single player mode - use provided decisions
+        decisionsArray.push(singlePlayerDecisions);
+      } else {
+        // Multiplayer mode - validate all decisions are present
+        const missing: number[] = [];
+        for (let i = 0; i < config.humans; i++) {
+          if (!allPlayerDecisions.has(i)) {
+            missing.push(i);
+          }
+        }
+        if (missing.length > 0) {
+          setError(`Missing decisions for companies: ${missing.map(i => `Company ${i + 1}`).join(", ")}`);
+          setIsRunning(false);
+          return;
+        }
+        
+        // Collect all player decisions
+        for (let i = 0; i < config.humans; i++) {
+          const decisions = allPlayerDecisions.get(i);
+          if (!decisions) {
+            throw new Error(`Missing decisions for company ${i + 1}`);
+          }
+          decisionsArray.push(decisions);
+        }
+      }
+
       const res = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           players: config.humans,
-          decisions,
+          decisions: decisionsArray,
         }),
       });
 
@@ -70,23 +152,26 @@ export default function SimulatePage() {
           setEconomy(data.economy);
         }
 
-        // Update company state from first report for next quarter
-        if (data.reports.length > 0) {
-          const firstReport = data.reports[0];
-          setCompanyState({
-            name: firstReport.company || "Company 1",
-            sharePrice: firstReport.share_price,
-            netWorth: firstReport.net_worth,
-            cash: firstReport.cash,
-            employees: (firstReport.salespeople || 0) + (firstReport.assembly_workers || 0) + (firstReport.machinists || 0),
-            machines: firstReport.machines,
-            salespeople: firstReport.salespeople || 10,
-            assemblyWorkers: firstReport.assembly_workers || 40,
-            productStarRatings: { "Product 1": 3, "Product 2": 3, "Product 3": 3 }, // Would come from company state
-            productDevAccumulated: { "Product 1": 0, "Product 2": 0, "Product 3": 0 }, // Would come from company state
-            creditworthiness: 500_000, // Would calculate from report
-          });
-        }
+        // Update company states from reports
+        const newStates = new Map();
+        data.reports.forEach((report, idx) => {
+          if (idx < config.humans) {
+            newStates.set(idx, {
+              name: report.company || `Company ${idx + 1}`,
+              sharePrice: report.share_price,
+              netWorth: report.net_worth,
+              cash: report.cash,
+              employees: (report.salespeople || 0) + (report.assembly_workers || 0) + (report.machinists || 0),
+              machines: report.machines,
+              salespeople: report.salespeople || 10,
+              assemblyWorkers: report.assembly_workers || 40,
+              productStarRatings: { "Product 1": 3, "Product 2": 3, "Product 3": 3 },
+              productDevAccumulated: { "Product 1": 0, "Product 2": 0, "Product 3": 0 },
+              creditworthiness: 500_000,
+            });
+          }
+        });
+        setCompanyStates(newStates);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Simulation call failed.");
@@ -96,6 +181,7 @@ export default function SimulatePage() {
   };
 
   const aiPlayers = config.humans === 1 ? 7 : 0;
+  const currentCompanyState = selectedPlayer !== null ? companyStates.get(selectedPlayer) : null;
 
   return (
     <main className="flex flex-1 flex-col gap-8">
@@ -127,13 +213,23 @@ export default function SimulatePage() {
               min={1}
               max={8}
               value={config.humans}
-              onChange={(e) => setConfig({ humans: Number(e.target.value) })}
-              className="w-full accent-primary-500"
+              onChange={(e) => {
+                if (!playerLocked) {
+                  setConfig({ humans: Number(e.target.value) });
+                }
+              }}
+              disabled={playerLocked}
+              className="w-full accent-primary-500 disabled:opacity-50"
             />
             <div className="flex justify-between text-xs text-slate-400">
               <span>Solo vs AI</span>
               <span>Full multi‑player</span>
             </div>
+            {playerLocked && (
+              <p className="text-xs text-amber-400">
+                ⚠️ Player selection is locked. Reset to change.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -166,23 +262,103 @@ export default function SimulatePage() {
         </p>
       </section>
 
-      {/* Decision Form */}
-      {!reports && (
-        <DecisionForm
-          companyName={companyState.name}
-          sharePrice={companyState.sharePrice}
-          netWorth={companyState.netWorth}
-          cash={companyState.cash}
-          employees={companyState.employees}
-          machines={companyState.machines}
-          salespeople={companyState.salespeople}
-          assemblyWorkers={companyState.assemblyWorkers}
-          productStarRatings={companyState.productStarRatings}
-          productDevAccumulated={companyState.productDevAccumulated}
-          currentQuarter={economy?.quarter || 1}
-          creditworthiness={companyState.creditworthiness}
-          onSubmit={handleRunQuarter}
-        />
+      {/* Player Selection (Multiplayer only) */}
+      {config.humans > 1 && !playerLocked && (
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-slate-100">Select Your Company</h2>
+          <p className="mb-4 text-sm text-slate-300">
+            Choose which company you will control. This selection cannot be changed once made.
+          </p>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {Array.from({ length: config.humans }).map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => handlePlayerSelect(idx)}
+                className="rounded-xl border-2 border-slate-700 bg-slate-800 p-4 text-center transition hover:border-primary-500 hover:bg-slate-700"
+              >
+                <div className="text-lg font-semibold text-slate-100">Company {idx + 1}</div>
+                <div className="mt-1 text-xs text-slate-400">Click to select</div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Selected Player Display (Multiplayer) */}
+      {config.humans > 1 && playerLocked && selectedPlayer !== null && (
+        <section className="rounded-2xl border border-primary-500/50 bg-primary-500/10 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-100">
+                You are controlling: <span className="text-primary-400">Company {selectedPlayer + 1}</span>
+              </h3>
+              <p className="mt-1 text-sm text-slate-300">
+                Make decisions for your company below. All {config.humans} players must submit decisions before running the quarter.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setPlayerLocked(false);
+                setSelectedPlayer(null);
+                setAllPlayerDecisions(new Map());
+              }}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+            >
+              Reset Selection
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Decision Forms */}
+      {!reports && currentCompanyState && selectedPlayer !== null && (
+        <div className="space-y-6">
+          {/* Show all player decision status for multiplayer */}
+          {config.humans > 1 && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-200">Decision Status</h3>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                {Array.from({ length: config.humans }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className={`rounded-lg p-3 ${
+                      allPlayerDecisions.has(idx)
+                        ? "bg-green-500/20 border border-green-500/50"
+                        : "bg-slate-800 border border-slate-700"
+                    }`}
+                  >
+                    <div className="text-xs text-slate-400">Company {idx + 1}</div>
+                    <div className={`mt-1 text-sm font-semibold ${
+                      allPlayerDecisions.has(idx) ? "text-green-400" : "text-slate-500"
+                    }`}>
+                      {allPlayerDecisions.has(idx) ? "✓ Ready" : "Pending"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DecisionForm
+            companyName={currentCompanyState.name}
+            sharePrice={currentCompanyState.sharePrice}
+            netWorth={currentCompanyState.netWorth}
+            cash={currentCompanyState.cash}
+            employees={currentCompanyState.employees}
+            machines={currentCompanyState.machines}
+            salespeople={currentCompanyState.salespeople}
+            assemblyWorkers={currentCompanyState.assemblyWorkers}
+            productStarRatings={currentCompanyState.productStarRatings}
+            productDevAccumulated={currentCompanyState.productDevAccumulated}
+            currentQuarter={economy?.quarter || 1}
+            creditworthiness={currentCompanyState.creditworthiness}
+            onSubmit={(decisions) => handleDecisionChange(selectedPlayer, decisions)}
+            onRunQuarter={config.humans > 1 ? () => handleRunQuarter() : undefined}
+            onSubmitSinglePlayer={config.humans === 1 ? handleRunQuarter : undefined}
+            isRunning={isRunning}
+            allDecisionsReady={config.humans > 1 ? Array.from({ length: config.humans }).every((_, i) => allPlayerDecisions.has(i)) : true}
+          />
+        </div>
       )}
 
       {/* Error Display */}
@@ -211,8 +387,15 @@ export default function SimulatePage() {
                 </thead>
                 <tbody>
                   {reports.map((report, idx) => (
-                    <tr key={idx} className="border-b border-slate-700">
-                      <td className="px-4 py-2 text-slate-300">{report.company || `Company ${idx + 1}`}</td>
+                    <tr key={idx} className={`border-b border-slate-700 ${
+                      idx === selectedPlayer ? "bg-primary-500/10" : ""
+                    }`}>
+                      <td className="px-4 py-2 text-slate-300">
+                        {report.company || `Company ${idx + 1}`}
+                        {idx === selectedPlayer && (
+                          <span className="ml-2 text-xs text-primary-400">(You)</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-right text-slate-400">
                         £{report.share_price.toFixed(2)}
                       </td>
@@ -232,11 +415,13 @@ export default function SimulatePage() {
             </div>
           </div>
 
-          {/* Detailed Management Report for First Company */}
-          <ManagementReportDisplay
-            report={reports[0]}
-            companyName={reports[0].company || "Company 1"}
-          />
+          {/* Detailed Management Report for Selected Company */}
+          {selectedPlayer !== null && reports[selectedPlayer] && (
+            <ManagementReportDisplay
+              report={reports[selectedPlayer]}
+              companyName={reports[selectedPlayer].company || `Company ${selectedPlayer + 1}`}
+            />
+          )}
 
           {/* Button to run next quarter */}
           <div className="flex justify-center">
@@ -244,6 +429,7 @@ export default function SimulatePage() {
               onClick={() => {
                 setReports(null);
                 setError(null);
+                // Keep player selection locked for next quarter
               }}
               className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
             >
