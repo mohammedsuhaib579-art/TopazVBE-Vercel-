@@ -25,9 +25,7 @@ type ApiResponse = {
 
 export default function SimulatePage() {
   const [config, setConfig] = useState<PlayerConfig>({ humans: 1 });
-  const [gameStarted, setGameStarted] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
-  const [playerLocked, setPlayerLocked] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [reports, setReports] = useState<ManagementReport[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,10 +49,11 @@ export default function SimulatePage() {
     creditworthiness: number;
   }>>(new Map());
 
+  // Track if player count is locked (locked once a player is selected or decisions are made)
+  const [playerCountLocked, setPlayerCountLocked] = useState(false);
+
   // Initialize company states
   useEffect(() => {
-    if (!gameStarted) return;
-    
     const states = new Map();
     for (let i = 0; i < config.humans; i++) {
       states.set(i, {
@@ -72,50 +71,63 @@ export default function SimulatePage() {
       });
     }
     setCompanyStates(states);
-    // Reset player selection when number of players changes (only if game not started)
-    if (config.humans > 1 && !playerLocked && gameStarted) {
-      setSelectedPlayer(null);
-      setAllPlayerDecisions(new Map());
+    // Reset player selection when number of players changes (only if not locked)
+    if (!playerCountLocked && config.humans > 1 && selectedPlayer === null) {
+      setSelectedPlayer(0); // Default to first company
     }
-  }, [config.humans, playerLocked, gameStarted]);
+  }, [config.humans, playerCountLocked]);
 
-  // Auto-select player 0 for single player mode after game starts
+  // Auto-select player 0 for single player mode and lock player count
   useEffect(() => {
-    if (gameStarted && config.humans === 1 && selectedPlayer === null) {
+    if (config.humans === 1 && selectedPlayer === null) {
       setSelectedPlayer(0);
-      setPlayerLocked(true);
+      setPlayerCountLocked(true);
     }
-  }, [gameStarted, config.humans, selectedPlayer]);
+  }, [config.humans, selectedPlayer]);
 
-  const handleStartGame = () => {
-    setGameStarted(true);
-    // Auto-select player 0 for single player
-    if (config.humans === 1) {
-      setSelectedPlayer(0);
-      setPlayerLocked(true);
+  // Lock player count when a player is selected in multiplayer
+  useEffect(() => {
+    if (config.humans > 1 && selectedPlayer !== null && !playerCountLocked) {
+      setPlayerCountLocked(true);
     }
-  };
+  }, [config.humans, selectedPlayer, playerCountLocked]);
 
-  const handleResetGame = () => {
-    setGameStarted(false);
-    setSelectedPlayer(null);
-    setPlayerLocked(false);
-    setAllPlayerDecisions(new Map());
-    setReports(null);
-    setError(null);
+  // Scroll to top when selected player changes
+  useEffect(() => {
+    if (selectedPlayer !== null) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [selectedPlayer]);
+
+  const handleSwitchCompany = (playerIdx: number) => {
+    setSelectedPlayer(playerIdx);
+    // Lock player count when switching (if not already locked)
+    if (!playerCountLocked) {
+      setPlayerCountLocked(true);
+    }
   };
 
   const handlePlayerSelect = (playerIdx: number) => {
-    if (!playerLocked) {
-      setSelectedPlayer(playerIdx);
-      setPlayerLocked(true);
-    }
+    setSelectedPlayer(playerIdx);
+    setPlayerCountLocked(true);
   };
 
   const handleDecisionChange = (playerIdx: number, decisions: Decisions) => {
     const newDecisions = new Map(allPlayerDecisions);
     newDecisions.set(playerIdx, decisions);
     setAllPlayerDecisions(newDecisions);
+    
+    // Auto-advance to next company that hasn't saved decisions
+    if (config.humans > 1) {
+      // Find next company without decisions
+      for (let i = 1; i < config.humans; i++) {
+        const nextIdx = (playerIdx + i) % config.humans;
+        if (!newDecisions.has(nextIdx)) {
+          setSelectedPlayer(nextIdx);
+          break;
+        }
+      }
+    }
   };
 
   const handleRunQuarter = async (singlePlayerDecisions?: Decisions) => {
@@ -235,20 +247,20 @@ export default function SimulatePage() {
               max={8}
               value={config.humans}
               onChange={(e) => {
-                if (!gameStarted) {
+                if (!playerCountLocked) {
                   setConfig({ humans: Number(e.target.value) });
                 }
               }}
-              disabled={gameStarted}
+              disabled={playerCountLocked}
               className="w-full accent-primary-500 disabled:opacity-50"
             />
             <div className="flex justify-between text-xs text-slate-400">
               <span>Solo vs AI</span>
               <span>Full multi‑player</span>
             </div>
-            {gameStarted && (
+            {playerCountLocked && (
               <p className="text-xs text-amber-400">
-                ⚠️ Game configuration is locked. Reset to change.
+                ⚠️ Player count is locked. Reset to change.
               </p>
             )}
           </div>
@@ -281,82 +293,51 @@ export default function SimulatePage() {
           With 1 human player, the remaining 7 companies are controlled by AI. With 2–8 humans, the
           table is entirely player‑driven.
         </p>
-        
-        {/* Start Game Button */}
-        {!gameStarted && (
-          <div className="mt-6 flex justify-center">
-            <button
-              onClick={handleStartGame}
-              className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
-            >
-              🚀 Start Simulation
-            </button>
-          </div>
-        )}
-        
-        {/* Reset Game Button */}
-        {gameStarted && (
+        {playerCountLocked && (
           <div className="mt-4 flex justify-center">
             <button
-              onClick={handleResetGame}
+              onClick={() => {
+                setPlayerCountLocked(false);
+                setSelectedPlayer(null);
+                setAllPlayerDecisions(new Map());
+                setReports(null);
+                setError(null);
+              }}
               className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
             >
-              Reset Game Configuration
+              Reset Player Count
             </button>
           </div>
         )}
       </section>
 
-      {/* Player Selection (Multiplayer only) */}
-      {gameStarted && config.humans > 1 && !playerLocked && (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-slate-100">Select Your Company</h2>
-          <p className="mb-4 text-sm text-slate-300">
-            Choose which company you will control. This selection cannot be changed once made.
-          </p>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      {/* Company Switcher (Multiplayer only) */}
+      {config.humans > 1 && selectedPlayer !== null && (
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-slate-200">Switch Company</h3>
+          <div className="flex flex-wrap gap-2">
             {Array.from({ length: config.humans }).map((_, idx) => (
               <button
                 key={idx}
-                onClick={() => handlePlayerSelect(idx)}
-                className="rounded-xl border-2 border-slate-700 bg-slate-800 p-4 text-center transition hover:border-primary-500 hover:bg-slate-700"
+                onClick={() => handleSwitchCompany(idx)}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  selectedPlayer === idx
+                    ? "bg-primary-500 text-white"
+                    : allPlayerDecisions.has(idx)
+                    ? "bg-green-500/20 border border-green-500/50 text-green-400 hover:bg-green-500/30"
+                    : "bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700"
+                }`}
               >
-                <div className="text-lg font-semibold text-slate-100">Company {idx + 1}</div>
-                <div className="mt-1 text-xs text-slate-400">Click to select</div>
+                Company {idx + 1}
+                {allPlayerDecisions.has(idx) && " ✓"}
               </button>
             ))}
           </div>
         </section>
       )}
 
-      {/* Selected Player Display (Multiplayer) */}
-      {config.humans > 1 && playerLocked && selectedPlayer !== null && (
-        <section className="rounded-2xl border border-primary-500/50 bg-primary-500/10 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-100">
-                You are controlling: <span className="text-primary-400">Company {selectedPlayer + 1}</span>
-              </h3>
-              <p className="mt-1 text-sm text-slate-300">
-                Make decisions for your company below. All {config.humans} players must submit decisions before running the quarter.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setPlayerLocked(false);
-                setSelectedPlayer(null);
-                setAllPlayerDecisions(new Map());
-              }}
-              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
-            >
-              Reset Selection
-            </button>
-          </div>
-        </section>
-      )}
-
       {/* Decision Forms */}
-      {gameStarted && !reports && currentCompanyState && selectedPlayer !== null && (
+      {!reports && currentCompanyState && selectedPlayer !== null && (
         <div className="space-y-6">
           {/* Show all player decision status for multiplayer */}
           {config.humans > 1 && (
