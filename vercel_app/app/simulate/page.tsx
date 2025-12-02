@@ -49,8 +49,9 @@ export default function SimulatePage() {
     creditworthiness: number;
   }>>(new Map());
 
-  // Track if player count is locked (locked once a player is selected or decisions are made)
+  // Track if player count is locked (locked once confirmed)
   const [playerCountLocked, setPlayerCountLocked] = useState(false);
+  const [pendingPlayerSelection, setPendingPlayerSelection] = useState<number | null>(null);
 
   // Initialize company states
   useEffect(() => {
@@ -71,24 +72,17 @@ export default function SimulatePage() {
       });
     }
     setCompanyStates(states);
-    // Reset player selection when number of players changes (only if not locked)
-    if (!playerCountLocked && config.humans > 1 && selectedPlayer === null) {
-      setSelectedPlayer(0); // Default to first company
+    // Reset selection when number of players changes (only if not locked)
+    if (!playerCountLocked) {
+      setSelectedPlayer(null);
+      setPendingPlayerSelection(null);
     }
   }, [config.humans, playerCountLocked]);
 
-  // Auto-select player 0 for single player mode and lock player count
+  // Auto-select player 0 for single player mode (but don't lock yet)
   useEffect(() => {
-    if (config.humans === 1 && selectedPlayer === null) {
-      setSelectedPlayer(0);
-      setPlayerCountLocked(true);
-    }
-  }, [config.humans, selectedPlayer]);
-
-  // Lock player count when a player is selected in multiplayer
-  useEffect(() => {
-    if (config.humans > 1 && selectedPlayer !== null && !playerCountLocked) {
-      setPlayerCountLocked(true);
+    if (config.humans === 1 && selectedPlayer === null && !playerCountLocked) {
+      setPendingPlayerSelection(0);
     }
   }, [config.humans, selectedPlayer, playerCountLocked]);
 
@@ -101,15 +95,18 @@ export default function SimulatePage() {
 
   const handleSwitchCompany = (playerIdx: number) => {
     setSelectedPlayer(playerIdx);
-    // Lock player count when switching (if not already locked)
-    if (!playerCountLocked) {
-      setPlayerCountLocked(true);
-    }
   };
 
   const handlePlayerSelect = (playerIdx: number) => {
-    setSelectedPlayer(playerIdx);
-    setPlayerCountLocked(true);
+    setPendingPlayerSelection(playerIdx);
+  };
+
+  const handleConfirmSelection = () => {
+    if (pendingPlayerSelection !== null) {
+      setSelectedPlayer(pendingPlayerSelection);
+      setPlayerCountLocked(true);
+      setPendingPlayerSelection(null);
+    }
   };
 
   const handleDecisionChange = (playerIdx: number, decisions: Decisions) => {
@@ -249,6 +246,8 @@ export default function SimulatePage() {
               onChange={(e) => {
                 if (!playerCountLocked) {
                   setConfig({ humans: Number(e.target.value) });
+                  setPendingPlayerSelection(null);
+                  setSelectedPlayer(null);
                 }
               }}
               disabled={playerCountLocked}
@@ -299,6 +298,7 @@ export default function SimulatePage() {
               onClick={() => {
                 setPlayerCountLocked(false);
                 setSelectedPlayer(null);
+                setPendingPlayerSelection(null);
                 setAllPlayerDecisions(new Map());
                 setReports(null);
                 setError(null);
@@ -311,8 +311,64 @@ export default function SimulatePage() {
         )}
       </section>
 
-      {/* Company Switcher (Multiplayer only) */}
-      {config.humans > 1 && selectedPlayer !== null && (
+      {/* Player Selection (Multiplayer - before confirmation) */}
+      {config.humans > 1 && !playerCountLocked && (
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-slate-100">Select Your Company</h2>
+          <p className="mb-4 text-sm text-slate-300">
+            Choose which company you will control. Click "Confirm Selection" to lock your choice.
+          </p>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {Array.from({ length: config.humans }).map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => handlePlayerSelect(idx)}
+                className={`rounded-xl border-2 p-4 text-center transition ${
+                  pendingPlayerSelection === idx
+                    ? "border-primary-500 bg-primary-500/20"
+                    : "border-slate-700 bg-slate-800 hover:border-primary-500 hover:bg-slate-700"
+                }`}
+              >
+                <div className="text-lg font-semibold text-slate-100">Company {idx + 1}</div>
+                <div className="mt-1 text-xs text-slate-400">
+                  {pendingPlayerSelection === idx ? "Selected" : "Click to select"}
+                </div>
+              </button>
+            ))}
+          </div>
+          {pendingPlayerSelection !== null && (
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={handleConfirmSelection}
+                className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                ✓ Confirm Selection
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Player Selection (Single Player - before confirmation) */}
+      {config.humans === 1 && !playerCountLocked && pendingPlayerSelection === 0 && (
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-slate-100">Confirm Your Selection</h2>
+          <p className="mb-4 text-sm text-slate-300">
+            You will be controlling <span className="font-semibold text-primary-400">Company 1</span>. Click "Confirm Selection" to proceed.
+          </p>
+          <div className="flex justify-center">
+            <button
+              onClick={handleConfirmSelection}
+              className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+            >
+              ✓ Confirm Selection
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Company Switcher (Multiplayer only - after confirmation) */}
+      {config.humans > 1 && selectedPlayer !== null && playerCountLocked && (
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="mb-3 text-sm font-semibold text-slate-200">Switch Company</h3>
           <div className="flex flex-wrap gap-2">
