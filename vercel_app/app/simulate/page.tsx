@@ -511,6 +511,8 @@ export default function SimulatePage() {
               onClick={() => {
                 setReports(null);
                 setError(null);
+                // Clear all saved decisions for the new quarter
+                setAllPlayerDecisions(new Map());
                 // Keep player selection locked for next quarter
               }}
               className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
