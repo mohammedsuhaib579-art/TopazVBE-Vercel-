@@ -115,6 +115,17 @@ class SeededRNG {
   }
 }
 
+// Helper function to create empty ProductAreaKey record
+function createEmptyProductAreaRecord(): Record<ProductAreaKey, number> {
+  const result: Partial<Record<ProductAreaKey, number>> = {};
+  for (const product of PRODUCTS) {
+    for (const area of AREAS) {
+      result[makeKey(product, area)] = 0;
+    }
+  }
+  return result as Record<ProductAreaKey, number>;
+}
+
 // Helper functions
 function createDefaultEconomy(): Economy {
   return {
@@ -142,8 +153,8 @@ function createDefaultCompanyState(name: string): CompanyState {
     machine_values: Array(10).fill(MACHINE_COST),
     material_stock: 5_000.0,
     material_orders: [],
-    stocks: {},
-    backlog: {},
+    stocks: createEmptyProductAreaRecord(),
+    backlog: createEmptyProductAreaRecord(),
     salespeople: 10,
     assembly_workers: 40,
     machinists: 40,
