@@ -25,6 +25,7 @@ type ApiResponse = {
 
 export default function SimulatePage() {
   const [config, setConfig] = useState<PlayerConfig>({ humans: 1 });
+  const [gameStarted, setGameStarted] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
   const [playerLocked, setPlayerLocked] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -52,6 +53,8 @@ export default function SimulatePage() {
 
   // Initialize company states
   useEffect(() => {
+    if (!gameStarted) return;
+    
     const states = new Map();
     for (let i = 0; i < config.humans; i++) {
       states.set(i, {
@@ -69,20 +72,38 @@ export default function SimulatePage() {
       });
     }
     setCompanyStates(states);
-    // Reset player selection when number of players changes
-    if (config.humans > 1 && !playerLocked) {
+    // Reset player selection when number of players changes (only if game not started)
+    if (config.humans > 1 && !playerLocked && gameStarted) {
       setSelectedPlayer(null);
       setAllPlayerDecisions(new Map());
     }
-  }, [config.humans, playerLocked]);
+  }, [config.humans, playerLocked, gameStarted]);
 
-  // Auto-select player 0 for single player mode
+  // Auto-select player 0 for single player mode after game starts
   useEffect(() => {
-    if (config.humans === 1 && selectedPlayer === null) {
+    if (gameStarted && config.humans === 1 && selectedPlayer === null) {
       setSelectedPlayer(0);
       setPlayerLocked(true);
     }
-  }, [config.humans, selectedPlayer]);
+  }, [gameStarted, config.humans, selectedPlayer]);
+
+  const handleStartGame = () => {
+    setGameStarted(true);
+    // Auto-select player 0 for single player
+    if (config.humans === 1) {
+      setSelectedPlayer(0);
+      setPlayerLocked(true);
+    }
+  };
+
+  const handleResetGame = () => {
+    setGameStarted(false);
+    setSelectedPlayer(null);
+    setPlayerLocked(false);
+    setAllPlayerDecisions(new Map());
+    setReports(null);
+    setError(null);
+  };
 
   const handlePlayerSelect = (playerIdx: number) => {
     if (!playerLocked) {
@@ -214,20 +235,20 @@ export default function SimulatePage() {
               max={8}
               value={config.humans}
               onChange={(e) => {
-                if (!playerLocked) {
+                if (!gameStarted) {
                   setConfig({ humans: Number(e.target.value) });
                 }
               }}
-              disabled={playerLocked}
+              disabled={gameStarted}
               className="w-full accent-primary-500 disabled:opacity-50"
             />
             <div className="flex justify-between text-xs text-slate-400">
               <span>Solo vs AI</span>
               <span>Full multi‑player</span>
             </div>
-            {playerLocked && (
+            {gameStarted && (
               <p className="text-xs text-amber-400">
-                ⚠️ Player selection is locked. Reset to change.
+                ⚠️ Game configuration is locked. Reset to change.
               </p>
             )}
           </div>
@@ -260,10 +281,34 @@ export default function SimulatePage() {
           With 1 human player, the remaining 7 companies are controlled by AI. With 2–8 humans, the
           table is entirely player‑driven.
         </p>
+        
+        {/* Start Game Button */}
+        {!gameStarted && (
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={handleStartGame}
+              className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+            >
+              🚀 Start Simulation
+            </button>
+          </div>
+        )}
+        
+        {/* Reset Game Button */}
+        {gameStarted && (
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={handleResetGame}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+            >
+              Reset Game Configuration
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Player Selection (Multiplayer only) */}
-      {config.humans > 1 && !playerLocked && (
+      {gameStarted && config.humans > 1 && !playerLocked && (
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
           <h2 className="mb-4 text-lg font-semibold text-slate-100">Select Your Company</h2>
           <p className="mb-4 text-sm text-slate-300">
@@ -311,7 +356,7 @@ export default function SimulatePage() {
       )}
 
       {/* Decision Forms */}
-      {!reports && currentCompanyState && selectedPlayer !== null && (
+      {gameStarted && !reports && currentCompanyState && selectedPlayer !== null && (
         <div className="space-y-6">
           {/* Show all player decision status for multiplayer */}
           {config.humans > 1 && (
