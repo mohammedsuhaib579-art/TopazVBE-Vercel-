@@ -74,6 +74,7 @@ import type {
 } from "./types";
 
 import { makeKey, parseKey } from "./types";
+import { simulateQuarterForCompany } from "./simulation_quarter";
 
 // Seeded RNG for deterministic behavior
 class SeededRNG {
@@ -98,7 +99,7 @@ class SeededRNG {
     return min + (max - min) * this.random();
   }
 
-  choice<T>(arr: T[]): T {
+  choice<T>(arr: readonly T[]): T {
     return arr[Math.floor(this.random() * arr.length)];
   }
 
@@ -952,10 +953,7 @@ export class Simulation {
     all_companies?: CompanyState[],
     all_decisions?: Decisions[]
   ): ManagementReport {
-    // Import and call the main simulation function
-    // Using dynamic import to avoid circular dependency
-    const simQuarter = require("./simulation_quarter");
-    return simQuarter.simulateQuarterForCompany(
+    return simulateQuarterForCompany(
       this,
       company,
       decisions,
