@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-950 text-slate-50;
+}
+
+.card-gradient {
+  @apply rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-xl;
+}
+
+.pill {
+  @apply inline-flex items-center rounded-full bg-slate-900/60 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-200;
+}
+
+
