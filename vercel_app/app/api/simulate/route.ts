@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Simulation } from "../../../lib/simulation";
-import type { Decisions } from "../../../lib/types";
+import type { Decisions, ProductAreaKey } from "../../../lib/types";
 import { PRODUCTS, AREAS } from "../../../lib/constants";
 import { makeKey } from "../../../lib/types";
 
@@ -9,6 +9,17 @@ type RequestBody = {
   decisions?: Partial<Decisions>;
   seed?: number;
 };
+
+// Helper to create empty advertising object with all ProductAreaKey combinations
+function createEmptyAdvertising(): Record<ProductAreaKey, number> {
+  const result: Partial<Record<ProductAreaKey, number>> = {};
+  for (const product of PRODUCTS) {
+    for (const area of AREAS) {
+      result[makeKey(product, area)] = 0;
+    }
+  }
+  return result as Record<ProductAreaKey, number>;
+}
 
 // Helper to convert simplified decisions to full Decisions format
 function createFullDecisions(partial: Partial<Decisions>): Decisions {
@@ -28,9 +39,9 @@ function createFullDecisions(partial: Partial<Decisions>): Decisions {
       "Product 2": 132,
       "Product 3": 154,
     },
-    advertising_trade_press: {},
-    advertising_support: {},
-    advertising_merchandising: {},
+    advertising_trade_press: createEmptyAdvertising(),
+    advertising_support: createEmptyAdvertising(),
+    advertising_merchandising: createEmptyAdvertising(),
     assembly_time: {
       "Product 1": 100,
       "Product 2": 150,
@@ -54,7 +65,7 @@ function createFullDecisions(partial: Partial<Decisions>): Decisions {
     vans_to_sell: 0,
     buy_competitor_info: false,
     buy_market_shares: false,
-    deliveries: {},
+    deliveries: createEmptyAdvertising(), // Same structure as advertising
     product_development: {
       "Product 1": 0,
       "Product 2": 0,
@@ -72,18 +83,6 @@ function createFullDecisions(partial: Partial<Decisions>): Decisions {
     machines_to_sell: 0,
     machines_to_order: 0,
   };
-
-  // Initialize advertising keys
-  for (const product of PRODUCTS) {
-    for (const area of AREAS) {
-      const key = makeKey(product, area);
-      if (!defaultDecisions.advertising_trade_press[key]) {
-        defaultDecisions.advertising_trade_press[key] = 0;
-        defaultDecisions.advertising_support[key] = 0;
-        defaultDecisions.advertising_merchandising[key] = 0;
-      }
-    }
-  }
 
   // Merge with provided decisions
   return {
