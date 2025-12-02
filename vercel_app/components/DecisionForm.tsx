@@ -30,6 +30,10 @@ interface DecisionFormProps {
   currentQuarter: number;
   creditworthiness: number;
   onSubmit: (decisions: Decisions) => void;
+  onRunQuarter?: () => void;
+  onSubmitSinglePlayer?: (decisions: Decisions) => void;
+  isRunning?: boolean;
+  allDecisionsReady?: boolean;
 }
 
 export default function DecisionForm({
@@ -46,6 +50,10 @@ export default function DecisionForm({
   currentQuarter,
   creditworthiness,
   onSubmit,
+  onRunQuarter,
+  onSubmitSinglePlayer,
+  isRunning = false,
+  allDecisionsReady = true,
 }: DecisionFormProps) {
   // Initialize state with defaults
   const [decisions, setDecisions] = useState<Partial<Decisions>>({
@@ -125,7 +133,17 @@ export default function DecisionForm({
       machines_to_sell: decisions.machines_to_sell || 0,
       machines_to_order: decisions.machines_to_order || 0,
     };
-    onSubmit(fullDecisions);
+    
+    // For multiplayer: save decisions and call onRunQuarter if all ready
+    // For single player: call onSubmitSinglePlayer to run immediately
+    if (onRunQuarter) {
+      onSubmit(fullDecisions); // Save this player's decisions
+      // onRunQuarter will be called from parent when all ready
+    } else if (onSubmitSinglePlayer) {
+      onSubmitSinglePlayer(fullDecisions); // Single player mode - submit immediately
+    } else {
+      onSubmit(fullDecisions); // Fallback
+    }
   };
 
   const [salesAllocRemaining, setSalesAllocRemaining] = useState(salespeople);
@@ -812,13 +830,22 @@ export default function DecisionForm({
       </section>
 
       {/* Submit Button */}
-      <div className="flex justify-center">
+      <div className="flex justify-center gap-4">
         <button
           onClick={handleSubmit}
-          className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+          className="rounded-full bg-gradient-to-r from-primary-500 to-accent-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          🚀 Submit All Decisions and Run Quarter
+          {onRunQuarter ? "💾 Save My Decisions" : "🚀 Submit All Decisions and Run Quarter"}
         </button>
+        {onRunQuarter && (
+          <button
+            onClick={onRunQuarter}
+            disabled={!allDecisionsReady || isRunning}
+            className="rounded-full bg-gradient-to-r from-green-500 to-emerald-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-green-500/30 transition hover:-translate-y-0.5 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRunning ? "⏳ Running..." : "🚀 Run Quarter (All Players Ready)"}
+          </button>
+        )}
       </div>
     </div>
   );
