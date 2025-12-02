@@ -2,7 +2,7 @@
 
 import type { ManagementReport } from "../lib/types";
 import { PRODUCTS, AREAS } from "../lib/constants";
-import { parseKey } from "../lib/types";
+import { parseKey, makeKey } from "../lib/types";
 
 interface ManagementReportProps {
   report: ManagementReport;
@@ -269,10 +269,10 @@ export default function ManagementReportDisplay({ report, companyName }: Managem
                         <tr key={area} className="border-b border-slate-700">
                           <td className="px-2 py-1 text-slate-300">{area}</td>
                           {PRODUCTS.map((product) => {
-                            const key = `${product}|${area}`;
+                            const key = makeKey(product, area);
                             return (
                               <td key={product} className="px-2 py-1 text-right text-slate-400">
-                                {report.deliveries?.[key as any] || 0}
+                                {report.deliveries?.[key] || 0}
                               </td>
                             );
                           })}
@@ -303,10 +303,10 @@ export default function ManagementReportDisplay({ report, companyName }: Managem
                         <tr key={area} className="border-b border-slate-700">
                           <td className="px-2 py-1 text-slate-300">{area}</td>
                           {PRODUCTS.map((product) => {
-                            const key = `${product}|${area}`;
+                            const key = makeKey(product, area);
                             return (
                               <td key={product} className="px-2 py-1 text-right text-slate-400">
-                                {report.new_orders?.[key as any] || 0}
+                                {report.new_orders?.[key] || 0}
                               </td>
                             );
                           })}
@@ -337,10 +337,10 @@ export default function ManagementReportDisplay({ report, companyName }: Managem
                         <tr key={area} className="border-b border-slate-700">
                           <td className="px-2 py-1 text-slate-300">{area}</td>
                           {PRODUCTS.map((product) => {
-                            const key = `${product}|${area}`;
+                            const key = makeKey(product, area);
                             return (
                               <td key={product} className="px-2 py-1 text-right text-slate-400">
-                                {report.sales?.[key as any] || 0}
+                                {report.sales?.[key] || 0}
                               </td>
                             );
                           })}
@@ -371,10 +371,10 @@ export default function ManagementReportDisplay({ report, companyName }: Managem
                         <tr key={area} className="border-b border-slate-700">
                           <td className="px-2 py-1 text-slate-300">{area}</td>
                           {PRODUCTS.map((product) => {
-                            const key = `${product}|${area}`;
+                            const key = makeKey(product, area);
                             return (
                               <td key={product} className="px-2 py-1 text-right text-slate-400">
-                                {report.backlog?.[key as any] || 0}
+                                {report.backlog?.[key] || 0}
                               </td>
                             );
                           })}
@@ -405,10 +405,10 @@ export default function ManagementReportDisplay({ report, companyName }: Managem
                         <tr key={area} className="border-b border-slate-700">
                           <td className="px-2 py-1 text-slate-300">{area}</td>
                           {PRODUCTS.map((product) => {
-                            const key = `${product}|${area}`;
+                            const key = makeKey(product, area);
                             return (
                               <td key={product} className="px-2 py-1 text-right text-slate-400">
-                                {report.stocks?.[key as any] || 0}
+                                {report.stocks?.[key] || 0}
                               </td>
                             );
                           })}
