@@ -6,7 +6,7 @@ import { makeKey } from "../../../lib/types";
 
 type RequestBody = {
   players?: number;
-  decisions?: Partial<Decisions>;
+  decisions?: Partial<Decisions> | Partial<Decisions>[]; // Can be single decision or array for multiplayer
   seed?: number;
 };
 
@@ -142,11 +142,19 @@ export async function POST(req: Request) {
     const sim = new Simulation(n_companies, seed);
     sim.n_players = players;
 
-    // Convert decisions to full format
-    const fullDecisions = createFullDecisions(body.decisions || {});
+    // Handle decisions - can be single object or array
+    let decisionsArray: Decisions[];
+    if (Array.isArray(body.decisions)) {
+      // Multiplayer mode - convert each decision
+      decisionsArray = body.decisions.map(d => createFullDecisions(d));
+    } else {
+      // Single player mode
+      const fullDecisions = createFullDecisions(body.decisions || {});
+      decisionsArray = [fullDecisions];
+    }
 
     // Run simulation
-    const reports = sim.step([fullDecisions]);
+    const reports = sim.step(decisionsArray);
 
     return NextResponse.json({
       ok: true,
