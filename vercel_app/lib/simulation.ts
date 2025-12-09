@@ -366,8 +366,8 @@ export class Simulation {
     const stock = company.stocks[backlogKey] || 0;
     const availability_factor = Math.min(1.1, 0.9 + stock / 2000.0);
 
-    // Apply workforce productivity multiplier
-    const productivity_factor = company.productivity_multiplier || 1.0;
+    // Note: Productivity multiplier is applied in production, not demand
+    // Demand is based on market attractiveness, not internal productivity
     
     const company_attractiveness =
       price_factor *
@@ -379,7 +379,6 @@ export class Simulation {
       credit_factor *
       delivery_factor *
       availability_factor *
-      productivity_factor *
       eventDemandModifier;
 
     if (
@@ -1164,6 +1163,9 @@ export class Simulation {
           costModifier *= (1 + event.effects.cost_modifier);
         }
       });
+      
+      // Store cost modifier in company state so it can be used in simulation_quarter
+      (company as any).currentCostModifier = costModifier;
       
       const rep = this.simulateQuarterForCompany(
         company,
