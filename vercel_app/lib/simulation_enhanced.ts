@@ -470,10 +470,10 @@ export function calculateWorkforceMetrics(
   const productivity = 0.8 + (morale / 100) * 0.3 + trainingRatio * 0.1;
   
   // Turnover cost (recruitment + dismissal costs)
-  const turnoverCost = (decisions.recruit_sales || 0) * RECRUITMENT_COST +
-                      (decisions.dismiss_sales || 0) * DISMISSAL_COST +
-                      (decisions.recruit_assembly || 0) * RECRUITMENT_COST +
-                      (decisions.dismiss_assembly || 0) * DISMISSAL_COST;
+  const turnoverCost = (decisions.recruit_sales || 0) * RECRUITMENT_COST["Salesperson"] +
+                      (decisions.dismiss_sales || 0) * DISMISSAL_COST["Salesperson"] +
+                      (decisions.recruit_assembly || 0) * RECRUITMENT_COST["Assembly worker"] +
+                      (decisions.dismiss_assembly || 0) * DISMISSAL_COST["Assembly worker"];
   
   // Training effectiveness (based on training budget)
   const trainingEffectiveness = Math.min(1.0, trainingRatio * 2);
