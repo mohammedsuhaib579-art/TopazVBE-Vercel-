@@ -12,7 +12,27 @@ import type {
   WorkforceMetrics,
 } from "./types";
 import { PRODUCTS, AREAS, BASE_GDP, BASE_UNEMPLOYMENT, BASE_CB_RATE, BASE_MATERIAL_PRICE } from "./constants";
-import { makeKey } from "./types";
+import { makeKey, type ProductAreaKey } from "./types";
+
+// Helper to create empty ProductAreaKey record
+function createEmptyProductAreaRecord(): Record<ProductAreaKey, number> {
+  const result: Partial<Record<ProductAreaKey, number>> = {};
+  for (const product of PRODUCTS) {
+    for (const area of AREAS) {
+      result[makeKey(product, area)] = 0;
+    }
+  }
+  return result as Record<ProductAreaKey, number>;
+}
+
+// Helper to create empty Product record
+function createEmptyProductRecord(): Record<"Product 1" | "Product 2" | "Product 3", number> {
+  return {
+    "Product 1": 0,
+    "Product 2": 0,
+    "Product 3": 0,
+  };
+}
 
 // Economy strength modifiers
 const ECONOMY_MODIFIERS: Record<EconomyStrength, {
@@ -84,16 +104,16 @@ export function generateCompetitorDecisions(
   switch (strategy) {
     case "aggressive":
       // Low prices, high advertising, rapid expansion
+      decisions.prices_home = createEmptyProductRecord();
+      decisions.prices_export = createEmptyProductRecord();
       PRODUCTS.forEach((p, i) => {
-        decisions.prices_home = decisions.prices_home || {};
-        decisions.prices_home[p] = base_price + 10 * i - 15 + rng.randint(-5, 5);
-        decisions.prices_export = decisions.prices_export || {};
-        decisions.prices_export[p] = (decisions.prices_home[p] || 100) * 1.05;
+        decisions.prices_home![p] = base_price + 10 * i - 15 + rng.randint(-5, 5);
+        decisions.prices_export![p] = decisions.prices_home![p] * 1.05;
       });
       
-      decisions.advertising_trade_press = {};
-      decisions.advertising_support = {};
-      decisions.advertising_merchandising = {};
+      decisions.advertising_trade_press = createEmptyProductAreaRecord();
+      decisions.advertising_support = createEmptyProductAreaRecord();
+      decisions.advertising_merchandising = createEmptyProductAreaRecord();
       PRODUCTS.forEach((p) => {
         AREAS.forEach((a) => {
           const key = makeKey(p, a);
@@ -104,7 +124,7 @@ export function generateCompetitorDecisions(
         });
       });
       
-      decisions.product_development = {};
+      decisions.product_development = createEmptyProductRecord();
       PRODUCTS.forEach((p) => {
         decisions.product_development![p] = rng.choice([10000, 15000, 20000]);
       });
@@ -116,16 +136,16 @@ export function generateCompetitorDecisions(
       
     case "conservative":
       // High prices, low costs, steady growth
+      decisions.prices_home = createEmptyProductRecord();
+      decisions.prices_export = createEmptyProductRecord();
       PRODUCTS.forEach((p, i) => {
-        decisions.prices_home = decisions.prices_home || {};
-        decisions.prices_home[p] = base_price + 20 * i + 15 + rng.randint(-5, 5);
-        decisions.prices_export = decisions.prices_export || {};
-        decisions.prices_export[p] = (decisions.prices_home[p] || 100) * 1.15;
+        decisions.prices_home![p] = base_price + 20 * i + 15 + rng.randint(-5, 5);
+        decisions.prices_export![p] = decisions.prices_home![p] * 1.15;
       });
       
-      decisions.advertising_trade_press = {};
-      decisions.advertising_support = {};
-      decisions.advertising_merchandising = {};
+      decisions.advertising_trade_press = createEmptyProductAreaRecord();
+      decisions.advertising_support = createEmptyProductAreaRecord();
+      decisions.advertising_merchandising = createEmptyProductAreaRecord();
       PRODUCTS.forEach((p) => {
         AREAS.forEach((a) => {
           const key = makeKey(p, a);
@@ -136,7 +156,7 @@ export function generateCompetitorDecisions(
         });
       });
       
-      decisions.product_development = {};
+      decisions.product_development = createEmptyProductRecord();
       PRODUCTS.forEach((p) => {
         decisions.product_development![p] = rng.choice([0, 3000, 5000]);
       });
@@ -148,19 +168,19 @@ export function generateCompetitorDecisions(
       
     case "quality_focused":
       // High quality, premium pricing
+      decisions.prices_home = createEmptyProductRecord();
+      decisions.prices_export = createEmptyProductRecord();
       PRODUCTS.forEach((p, i) => {
-        decisions.prices_home = decisions.prices_home || {};
-        decisions.prices_home[p] = base_price + 25 * i + 20 + rng.randint(-3, 3);
-        decisions.prices_export = decisions.prices_export || {};
-        decisions.prices_export[p] = (decisions.prices_home[p] || 100) * 1.2;
+        decisions.prices_home![p] = base_price + 25 * i + 20 + rng.randint(-3, 3);
+        decisions.prices_export![p] = decisions.prices_home![p] * 1.2;
       });
       
-      decisions.assembly_time = {};
+      decisions.assembly_time = createEmptyProductRecord();
       PRODUCTS.forEach((p) => {
         decisions.assembly_time![p] = MIN_ASSEMBLY_TIME[p] * rng.uniform(1.0, 1.1);
       });
       
-      decisions.product_development = {};
+      decisions.product_development = createEmptyProductRecord();
       PRODUCTS.forEach((p) => {
         decisions.product_development![p] = rng.choice([15000, 20000, 25000]);
       });
@@ -170,14 +190,14 @@ export function generateCompetitorDecisions(
       
     case "cost_leader":
       // Minimize costs, competitive pricing
+      decisions.prices_home = createEmptyProductRecord();
+      decisions.prices_export = createEmptyProductRecord();
       PRODUCTS.forEach((p, i) => {
-        decisions.prices_home = decisions.prices_home || {};
-        decisions.prices_home[p] = base_price + 12 * i - 10 + rng.randint(-3, 3);
-        decisions.prices_export = decisions.prices_export || {};
-        decisions.prices_export[p] = (decisions.prices_home[p] || 100) * 1.08;
+        decisions.prices_home![p] = base_price + 12 * i - 10 + rng.randint(-3, 3);
+        decisions.prices_export![p] = decisions.prices_home![p] * 1.08;
       });
       
-      decisions.assembly_time = {};
+      decisions.assembly_time = createEmptyProductRecord();
       PRODUCTS.forEach((p) => {
         decisions.assembly_time![p] = MIN_ASSEMBLY_TIME[p] * rng.uniform(1.2, 1.4);
       });
@@ -190,16 +210,16 @@ export function generateCompetitorDecisions(
     case "balanced":
     default:
       // Moderate approach - use default behavior
+      decisions.prices_home = createEmptyProductRecord();
+      decisions.prices_export = createEmptyProductRecord();
       PRODUCTS.forEach((p, i) => {
-        decisions.prices_home = decisions.prices_home || {};
-        decisions.prices_home[p] = base_price + 15 * i + rng.randint(-10, 10);
-        decisions.prices_export = decisions.prices_export || {};
-        decisions.prices_export[p] = (decisions.prices_home[p] || 100) * 1.1;
+        decisions.prices_home![p] = base_price + 15 * i + rng.randint(-10, 10);
+        decisions.prices_export![p] = decisions.prices_home![p] * 1.1;
       });
       
-      decisions.advertising_trade_press = {};
-      decisions.advertising_support = {};
-      decisions.advertising_merchandising = {};
+      decisions.advertising_trade_press = createEmptyProductAreaRecord();
+      decisions.advertising_support = createEmptyProductAreaRecord();
+      decisions.advertising_merchandising = createEmptyProductAreaRecord();
       PRODUCTS.forEach((p) => {
         AREAS.forEach((a) => {
           const key = makeKey(p, a);
@@ -210,7 +230,7 @@ export function generateCompetitorDecisions(
         });
       });
       
-      decisions.product_development = {};
+      decisions.product_development = createEmptyProductRecord();
       PRODUCTS.forEach((p) => {
         decisions.product_development![p] = rng.choice([0, 5000, 10000]);
       });
