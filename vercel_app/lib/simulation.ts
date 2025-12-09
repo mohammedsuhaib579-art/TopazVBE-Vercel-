@@ -64,6 +64,7 @@ import {
 
 import type {
   Economy,
+  EconomyStrength,
   Decisions,
   CompanyState,
   ProductImprovement,
@@ -71,10 +72,22 @@ import type {
   MachineOrder,
   ProductAreaKey,
   ManagementReport,
+  CompetitorStrategy,
+  RandomEvent,
 } from "./types";
 
 import { makeKey, parseKey } from "./types";
 import { simulateQuarterForCompany } from "./simulation_quarter";
+import {
+  determineEconomyStrength,
+  applyEconomyStrength,
+  generateRandomEvents,
+  generateCompetitorDecisions,
+  validateDecisions,
+  calculateSharePriceBreakdown,
+  calculateCashFlowStatement,
+  calculateWorkforceMetrics,
+} from "./simulation_enhanced";
 
 // Seeded RNG for deterministic behavior
 class SeededRNG {
@@ -128,7 +141,13 @@ function createEmptyProductAreaRecord(): Record<ProductAreaKey, number> {
 }
 
 // Helper functions
-function createDefaultEconomy(): Economy {
+function createDefaultEconomy(rng?: { random: () => number }): Economy {
+  // Randomly select initial economy strength
+  const strengthOptions: EconomyStrength[] = ["Strong", "Moderate", "Weak"];
+  const strength = rng ? 
+    strengthOptions[Math.floor(rng.random() * strengthOptions.length)] : 
+    "Moderate";
+  
   return {
     quarter: 1,
     year: 1,
@@ -136,6 +155,7 @@ function createDefaultEconomy(): Economy {
     unemployment: BASE_UNEMPLOYMENT,
     cb_rate: BASE_CB_RATE,
     material_price: BASE_MATERIAL_PRICE,
+    strength,
   };
 }
 
@@ -191,6 +211,12 @@ function createDefaultCompanyState(name: string): CompanyState {
     opening_loan: 0.0,
     opening_debtors: 0.0,
     opening_creditors: 0.0,
+    
+    // Workforce management
+    workforce_morale: 70.0, // Start with moderate morale
+    sales_retention_rate: 0.85,
+    assembly_retention_rate: 0.80,
+    productivity_multiplier: 1.0,
   };
 }
 
@@ -203,12 +229,23 @@ export class Simulation {
   public n_players: number;
   private rng: SeededRNG;
 
+  public randomEvents: RandomEvent[] = [];
+  private competitorStrategies: Map<number, CompetitorStrategy> = new Map();
+
   constructor(n_companies: number = 8, seed: number = 42) {
     this.rng = new SeededRNG(seed);
-    this.economy = createDefaultEconomy();
-    this.companies = Array.from({ length: n_companies }, (_, i) =>
-      createDefaultCompanyState(`Company ${i + 1}`)
-    );
+    this.economy = createDefaultEconomy(this.rng);
+    this.companies = Array.from({ length: n_companies }, (_, i) => {
+      const company = createDefaultCompanyState(`Company ${i + 1}`);
+      // Assign random strategy to AI companies
+      if (i >= 1) { // Company 0 is player, others are AI
+        const strategies: CompetitorStrategy[] = ["aggressive", "conservative", "balanced", "quality_focused", "cost_leader"];
+        const strategy = strategies[Math.floor(this.rng.random() * strategies.length)];
+        company.competitor_strategy = strategy;
+        this.competitorStrategies.set(i, strategy);
+      }
+      return company;
+    });
     this.history = [];
     this.material_prices_history = [BASE_MATERIAL_PRICE];
     this.n_players = 1;
@@ -224,24 +261,36 @@ export class Simulation {
     }
 
     const shock = this.rng.normal(0, 1.5);
-    this.economy.gdp = Math.max(80, this.economy.gdp * (1 + shock / 100));
+    const baseGdp = Math.max(80, this.economy.gdp * (1 + shock / 100));
 
     const u_shock = this.rng.normal(0, 0.3);
-    this.economy.unemployment = Math.min(
+    const baseUnemployment = Math.min(
       15,
       Math.max(2, this.economy.unemployment + u_shock - shock / 40)
     );
 
-    const rate_target = 2.5 + (this.economy.gdp - BASE_GDP) / 40;
+    const rate_target = 2.5 + (baseGdp - BASE_GDP) / 40;
     this.economy.cb_rate = Math.max(
       0.25,
       0.75 * this.economy.cb_rate + 0.25 * rate_target
     );
 
-    this.economy.material_price = Math.max(
+    const baseMaterialPrice = Math.max(
       60,
       this.economy.material_price *
         (1 + (this.economy.cb_rate - 2.5) / 200 + this.rng.normal(0, 0.01))
+    );
+
+    // Determine and update economy strength
+    this.economy.strength = determineEconomyStrength(baseGdp, baseUnemployment);
+    applyEconomyStrength(this.economy, baseGdp, baseUnemployment, baseMaterialPrice);
+    
+    // Generate random events
+    this.randomEvents = generateRandomEvents(
+      this.economy.quarter,
+      this.economy.year,
+      this.economy.strength,
+      this.rng
     );
   }
 
@@ -260,8 +309,23 @@ export class Simulation {
 
     const seasonal_factor = 1.0 + (this.economy.quarter === 4 ? 0.1 : 0.0);
     const gdp_factor = this.economy.gdp / BASE_GDP;
+    
+    // Apply economy strength modifier
+    const economyModifier = this.economy.strength === "Strong" ? 1.2 : 
+                           this.economy.strength === "Weak" ? 0.8 : 1.0;
 
-    const base_demand = 1000 * base_population_factor * seasonal_factor * gdp_factor;
+    const base_demand = 1000 * base_population_factor * seasonal_factor * gdp_factor * economyModifier;
+    
+    // Apply random event modifiers
+    let eventDemandModifier = 1.0;
+    this.randomEvents.forEach(event => {
+      if (event.effects.demand_modifier && 
+          (event.effects.affects_all_companies || 
+           (event.effects.affected_companies && 
+            event.effects.affected_companies.includes(this.companies.indexOf(company))))) {
+        eventDemandModifier *= (1 + (event.effects.demand_modifier || 0));
+      }
+    });
 
     const price =
       area === "Export"
@@ -276,7 +340,10 @@ export class Simulation {
       (decisions.advertising_trade_press[advKey] || 0) +
       (decisions.advertising_support[advKey] || 0) +
       (decisions.advertising_merchandising[advKey] || 0);
-    const adv_factor = 1 + 0.0003 * Math.sqrt(Math.max(0, adv_total));
+    // Enhanced advertising effect with stronger feedback (logarithmic scaling for diminishing returns)
+    // Higher impact for initial spending, but still meaningful for larger budgets
+    const adv_factor = 1 + 0.0005 * Math.sqrt(Math.max(0, adv_total)) + 
+                      0.00001 * Math.log1p(Math.max(0, adv_total / 1000));
 
     const q_factor = decisions.assembly_time[product] / MIN_ASSEMBLY_TIME[product];
     const quality_factor = Math.min(1.4, 0.7 + 0.7 * q_factor);
@@ -299,6 +366,9 @@ export class Simulation {
     const stock = company.stocks[backlogKey] || 0;
     const availability_factor = Math.min(1.1, 0.9 + stock / 2000.0);
 
+    // Apply workforce productivity multiplier
+    const productivity_factor = company.productivity_multiplier || 1.0;
+    
     const company_attractiveness =
       price_factor *
       adv_factor *
@@ -308,7 +378,9 @@ export class Simulation {
       salespeople_factor *
       credit_factor *
       delivery_factor *
-      availability_factor;
+      availability_factor *
+      productivity_factor *
+      eventDemandModifier;
 
     if (
       all_companies &&
@@ -966,41 +1038,12 @@ export class Simulation {
   // ========== AI COMPETITOR DECISIONS ==========
 
   autoDecisions(company: CompanyState): Decisions {
-    const base_price = 100;
-    const prices_home: Record<string, number> = {};
-    PRODUCTS.forEach((p, i) => {
-      prices_home[p] = base_price + 15 * i + this.rng.randint(-10, 10);
-    });
-
-    const prices_export: Record<string, number> = {};
-    PRODUCTS.forEach((p) => {
-      prices_export[p] = prices_home[p] * 1.1;
-    });
-
-    const assembly_time: Record<string, number> = {};
-    PRODUCTS.forEach((p) => {
-      assembly_time[p] = MIN_ASSEMBLY_TIME[p] * this.rng.uniform(1.0, 1.4);
-    });
-
-    const advertising_trade_press: Record<string, number> = {};
-    const advertising_support: Record<string, number> = {};
-    const advertising_merchandising: Record<string, number> = {};
-
-    PRODUCTS.forEach((p) => {
-      AREAS.forEach((a) => {
-        const val = this.rng.choice([0, 5000, 10000, 20000]);
-        const key = makeKey(p, a);
-        advertising_trade_press[key] = val / 3;
-        advertising_support[key] = val / 3;
-        advertising_merchandising[key] = val / 3;
-      });
-    });
-
-    const product_dev: Record<string, number> = {};
-    PRODUCTS.forEach((p) => {
-      product_dev[p] = this.rng.choice([0, 5000, 10000]);
-    });
-
+    // Use strategy-based decisions if available
+    const strategy = company.competitor_strategy || this.competitorStrategies.get(this.companies.indexOf(company)) || "balanced";
+    
+    const strategyDecisions = generateCompetitorDecisions(company, strategy, this.rng);
+    
+    // Fill in remaining required fields with defaults
     const total_sales = company.salespeople;
     const base: Record<string, number> = { South: 1.0, West: 0.7, North: 1.3, Export: 1.2 };
     const total_base = Object.values(base).reduce((sum, val) => sum + val, 0);
@@ -1024,19 +1067,25 @@ export class Simulation {
       });
     });
 
+    // Merge strategy decisions with defaults
     return {
       implement_major_improvement: { "Product 1": false, "Product 2": false, "Product 3": false },
-      prices_home: prices_home as Record<"Product 1" | "Product 2" | "Product 3", number>,
-      prices_export: prices_export as Record<"Product 1" | "Product 2" | "Product 3", number>,
-      advertising_trade_press,
-      advertising_support,
-      advertising_merchandising,
-      assembly_time: assembly_time as Record<"Product 1" | "Product 2" | "Product 3", number>,
+      prices_home: strategyDecisions.prices_home as Record<"Product 1" | "Product 2" | "Product 3", number> || 
+                   { "Product 1": 100, "Product 2": 115, "Product 3": 130 },
+      prices_export: strategyDecisions.prices_export as Record<"Product 1" | "Product 2" | "Product 3", number> ||
+                     { "Product 1": 110, "Product 2": 126.5, "Product 3": 143 },
+      advertising_trade_press: strategyDecisions.advertising_trade_press || createEmptyProductAreaRecord(),
+      advertising_support: strategyDecisions.advertising_support || createEmptyProductAreaRecord(),
+      advertising_merchandising: strategyDecisions.advertising_merchandising || createEmptyProductAreaRecord(),
+      assembly_time: strategyDecisions.assembly_time as Record<"Product 1" | "Product 2" | "Product 3", number> ||
+                     { "Product 1": MIN_ASSEMBLY_TIME["Product 1"] * 1.2, 
+                       "Product 2": MIN_ASSEMBLY_TIME["Product 2"] * 1.2,
+                       "Product 3": MIN_ASSEMBLY_TIME["Product 3"] * 1.2 },
       salespeople_allocation: sales_alloc as Record<"South" | "West" | "North" | "Export", number>,
-      sales_salary_per_quarter: MIN_SALES_SALARY_PER_QUARTER,
+      sales_salary_per_quarter: strategyDecisions.sales_salary_per_quarter || MIN_SALES_SALARY_PER_QUARTER,
       sales_commission_percent: 0.0,
-      assembly_wage_rate: ASSEMBLY_MIN_WAGE_RATE,
-      shift_level: this.rng.choice([1, 2, 3]),
+      assembly_wage_rate: strategyDecisions.assembly_wage_rate || ASSEMBLY_MIN_WAGE_RATE,
+      shift_level: strategyDecisions.shift_level || this.rng.choice([1, 2, 3]),
       management_budget: this.rng.choice([40000, 50000, 60000]),
       maintenance_hours_per_machine: this.rng.choice([20, 40, 60]),
       dividend_per_share: this.rng.choice([0.0, 0.02, 0.04]),
@@ -1046,11 +1095,12 @@ export class Simulation {
       buy_competitor_info: false,
       buy_market_shares: false,
       deliveries,
-      product_development: product_dev as Record<"Product 1" | "Product 2" | "Product 3", number>,
-      recruit_sales: this.rng.choice([0, 1, 2]),
+      product_development: strategyDecisions.product_development as Record<"Product 1" | "Product 2" | "Product 3", number> ||
+                          { "Product 1": 0, "Product 2": 0, "Product 3": 0 },
+      recruit_sales: strategyDecisions.recruit_sales || this.rng.choice([0, 1, 2]),
       dismiss_sales: 0,
       train_sales: 0,
-      recruit_assembly: this.rng.choice([0, 2, 4]),
+      recruit_assembly: strategyDecisions.recruit_assembly || this.rng.choice([0, 2, 4]),
       dismiss_assembly: 0,
       train_assembly: this.rng.choice([0, 2, 4]),
       materials_quantity: this.rng.choice([4000, 6000, 8000]),
@@ -1065,6 +1115,15 @@ export class Simulation {
 
   step(player_decisions_list: Decisions[]): ManagementReport[] {
     const all_decisions: Decisions[] = [];
+
+    // Validate player decisions
+    for (let i = 0; i < player_decisions_list.length; i++) {
+      const validation = validateDecisions(player_decisions_list[i]);
+      if (!validation.valid) {
+        console.warn(`Validation warnings for company ${i}:`, validation.errors);
+        // Continue anyway, but log warnings
+      }
+    }
 
     for (let i = 0; i < this.companies.length; i++) {
       const company = this.companies[i];
@@ -1081,10 +1140,31 @@ export class Simulation {
       }
     }
 
+    // Apply random events to economy/material prices before simulation
+    this.randomEvents.forEach(event => {
+      if (event.effects.gdp_modifier) {
+        this.economy.gdp *= (1 + event.effects.gdp_modifier);
+      }
+      if (event.effects.material_price_modifier) {
+        this.economy.material_price *= (1 + event.effects.material_price_modifier);
+      }
+    });
+
     const reports: ManagementReport[] = [];
     for (let i = 0; i < this.companies.length; i++) {
       const company = this.companies[i];
       const dec = all_decisions[i];
+      
+      // Apply random event cost modifiers
+      let costModifier = 1.0;
+      this.randomEvents.forEach(event => {
+        if (event.effects.cost_modifier && 
+            (event.effects.affects_all_companies || 
+             (event.effects.affected_companies && event.effects.affected_companies.includes(i)))) {
+          costModifier *= (1 + event.effects.cost_modifier);
+        }
+      });
+      
       const rep = this.simulateQuarterForCompany(
         company,
         dec,
@@ -1092,6 +1172,32 @@ export class Simulation {
         this.companies,
         all_decisions
       );
+      
+      // Add enhanced reporting
+      rep.share_price_breakdown = calculateSharePriceBreakdown(
+        company,
+        rep.net_profit,
+        rep.revenue,
+        dec.dividend_per_share
+      );
+      
+      // Calculate cash flow (simplified - would need more detailed tracking)
+      const operatingCashFlow = rep.net_profit; // Simplified
+      const investingCashFlow = -(dec.machines_to_order * MACHINE_COST * 0.1); // Simplified
+      const financingCashFlow = 0; // Simplified
+      rep.cash_flow_statement = calculateCashFlowStatement(
+        company,
+        operatingCashFlow,
+        investingCashFlow,
+        financingCashFlow
+      );
+      
+      rep.workforce_metrics = calculateWorkforceMetrics(company, dec);
+      rep.random_events = this.randomEvents.filter(e => 
+        e.effects.affects_all_companies || 
+        (e.effects.affected_companies && e.effects.affected_companies.includes(i))
+      );
+      
       reports.push({
         ...rep,
         company: company.name,
