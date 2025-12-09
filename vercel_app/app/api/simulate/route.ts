@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Simulation } from "../../../lib/simulation";
-import type { Decisions, ProductAreaKey } from "../../../lib/types";
+import type { Decisions, ProductAreaKey, CompanyState, Economy } from "../../../lib/types";
 import { PRODUCTS, AREAS } from "../../../lib/constants";
 import { makeKey } from "../../../lib/types";
 
@@ -8,6 +8,10 @@ type RequestBody = {
   players?: number;
   decisions?: Partial<Decisions> | Partial<Decisions>[]; // Can be single decision or array for multiplayer
   seed?: number;
+  companyStates?: CompanyState[]; // Pass company states for persistence
+  economy?: Economy; // Pass economy state for persistence
+  currentQuarter?: number;
+  currentYear?: number;
 };
 
 // Helper to create empty advertising object with all ProductAreaKey combinations
@@ -141,6 +145,36 @@ export async function POST(req: Request) {
     const n_companies = players === 1 ? 8 : players;
     const sim = new Simulation(n_companies, seed);
     sim.n_players = players;
+    
+    // Restore company states if provided (state persistence)
+    if (body.companyStates && body.companyStates.length > 0) {
+      // Restore state for human players
+      for (let i = 0; i < Math.min(players, body.companyStates.length); i++) {
+        if (body.companyStates[i]) {
+          // Deep clone to avoid reference issues
+          sim.companies[i] = JSON.parse(JSON.stringify(body.companyStates[i]));
+        }
+      }
+      // For AI companies, restore if provided
+      for (let i = players; i < Math.min(n_companies, body.companyStates.length); i++) {
+        if (body.companyStates[i]) {
+          sim.companies[i] = JSON.parse(JSON.stringify(body.companyStates[i]));
+        }
+      }
+    }
+    
+    // Restore economy state if provided
+    if (body.economy) {
+      sim.economy = { ...body.economy };
+    }
+    
+    // Set current quarter/year if provided
+    if (body.currentQuarter !== undefined) {
+      sim.economy.quarter = body.currentQuarter;
+    }
+    if (body.currentYear !== undefined) {
+      sim.economy.year = body.currentYear;
+    }
 
     // Handle decisions - can be single object or array
     let decisionsArray: Decisions[];
@@ -162,6 +196,7 @@ export async function POST(req: Request) {
       reports,
       economy: sim.economy,
       randomEvents: sim.randomEvents || [],
+      companyStates: sim.companies, // Return updated company states for persistence
     });
   } catch (error) {
     console.error("Simulation error:", error);
