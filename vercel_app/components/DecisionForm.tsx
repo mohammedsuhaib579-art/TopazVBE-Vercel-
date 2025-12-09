@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { Decisions, ProductAreaKey } from "../lib/types";
 import { PRODUCTS, AREAS, MIN_ASSEMBLY_TIME, MIN_MANAGEMENT_BUDGET, ASSEMBLY_MIN_WAGE_RATE, MIN_SALES_SALARY_PER_QUARTER, SUPPLIERS, MACHINE_HOURS_PER_SHIFT, MACHINISTS_PER_MACHINE } from "../lib/constants";
 import { makeKey } from "../lib/types";
+import { parseExcelToDecisions } from "../lib/excelImport";
 
 // Helper to create empty advertising/deliveries object with all ProductAreaKey combinations
 function createProductAreaRecord(defaultValue: number = 0): Record<ProductAreaKey, number> {
@@ -96,6 +97,42 @@ export default function DecisionForm({
     setDecisions((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setImportError(null);
+    const result = await parseExcelToDecisions(file);
+    
+    if (result.success && result.decisions) {
+      // Merge imported decisions with current state
+      setDecisions((prev) => ({
+        ...prev,
+        ...result.decisions,
+        // Merge nested objects properly
+        prices_home: { ...prev.prices_home, ...result.decisions?.prices_home },
+        prices_export: { ...prev.prices_export, ...result.decisions?.prices_export },
+        assembly_time: { ...prev.assembly_time, ...result.decisions?.assembly_time },
+        implement_major_improvement: { ...prev.implement_major_improvement, ...result.decisions?.implement_major_improvement },
+        product_development: { ...prev.product_development, ...result.decisions?.product_development },
+        salespeople_allocation: { ...prev.salespeople_allocation, ...result.decisions?.salespeople_allocation },
+        advertising_trade_press: { ...prev.advertising_trade_press, ...result.decisions?.advertising_trade_press },
+        advertising_support: { ...prev.advertising_support, ...result.decisions?.advertising_support },
+        advertising_merchandising: { ...prev.advertising_merchandising, ...result.decisions?.advertising_merchandising },
+        deliveries: { ...prev.deliveries, ...result.decisions?.deliveries },
+      }));
+      alert("Excel file imported successfully! Please review the values and submit.");
+    } else {
+      setImportError(result.error || "Failed to import Excel file");
+      alert(`Import failed: ${result.error || "Unknown error"}`);
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const handleSubmit = () => {
     // Ensure all required fields are set
     const fullDecisions: Decisions = {
@@ -155,6 +192,41 @@ export default function DecisionForm({
 
   return (
     <div className="space-y-6">
+      {/* Excel Import Button */}
+      <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-200">Import from Excel</h3>
+            <p className="text-xs text-slate-400">Upload an Excel file to pre-fill all decision values</p>
+            {importError && (
+              <p className="mt-1 text-xs text-red-400">{importError}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={generateExcelTemplate}
+            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700"
+          >
+            📥 Download Template
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleExcelImport}
+            className="hidden"
+            id="excel-upload"
+          />
+          <label
+            htmlFor="excel-upload"
+            className="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            📊 Upload Excel File
+          </label>
+        </div>
+      </div>
+      
       {/* Company Header */}
       <div className="rounded-2xl bg-gradient-to-r from-primary-500 to-accent-500 p-6 text-white shadow-lg">
         <h2 className="text-2xl font-bold">{companyName}</h2>
