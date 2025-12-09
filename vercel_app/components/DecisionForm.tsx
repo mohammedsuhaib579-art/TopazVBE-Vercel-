@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import type { Decisions, ProductAreaKey } from "../lib/types";
 import { PRODUCTS, AREAS, MIN_ASSEMBLY_TIME, MIN_MANAGEMENT_BUDGET, ASSEMBLY_MIN_WAGE_RATE, MIN_SALES_SALARY_PER_QUARTER, SUPPLIERS, MACHINE_HOURS_PER_SHIFT, MACHINISTS_PER_MACHINE } from "../lib/constants";
 import { makeKey } from "../lib/types";
-import { parseExcelToDecisions } from "../lib/excelImport";
+import { parseExcelToDecisions, generateExcelTemplate } from "../lib/excelImport";
 
 // Helper to create empty advertising/deliveries object with all ProductAreaKey combinations
 function createProductAreaRecord(defaultValue: number = 0): Record<ProductAreaKey, number> {
@@ -100,7 +100,7 @@ export default function DecisionForm({
     setDecisions((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExcelImport = async (event: { target: { files: FileList | null } }) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
@@ -109,21 +109,85 @@ export default function DecisionForm({
     
     if (result.success && result.decisions) {
       // Merge imported decisions with current state
-      setDecisions((prev) => ({
-        ...prev,
-        ...result.decisions,
+      setDecisions((prev: Partial<Decisions>) => {
+        const imported = result.decisions!;
+        
+        // Start with previous state
+        const merged: Partial<Decisions> = { ...prev };
+        
+        // Update simple fields
+        Object.keys(imported).forEach((key) => {
+          const k = key as keyof Decisions;
+          if (k === 'prices_home' || k === 'prices_export' || k === 'assembly_time' || 
+              k === 'product_development' || k === 'salespeople_allocation' ||
+              k === 'advertising_trade_press' || k === 'advertising_support' || 
+              k === 'advertising_merchandising' || k === 'deliveries' ||
+              k === 'implement_major_improvement') {
+            // Skip nested objects, handle separately
+            return;
+          }
+          if (imported[k] !== undefined) {
+            (merged as any)[k] = imported[k];
+          }
+        });
+        
         // Merge nested objects properly
-        prices_home: { ...prev.prices_home, ...result.decisions?.prices_home },
-        prices_export: { ...prev.prices_export, ...result.decisions?.prices_export },
-        assembly_time: { ...prev.assembly_time, ...result.decisions?.assembly_time },
-        implement_major_improvement: { ...prev.implement_major_improvement, ...result.decisions?.implement_major_improvement },
-        product_development: { ...prev.product_development, ...result.decisions?.product_development },
-        salespeople_allocation: { ...prev.salespeople_allocation, ...result.decisions?.salespeople_allocation },
-        advertising_trade_press: { ...prev.advertising_trade_press, ...result.decisions?.advertising_trade_press },
-        advertising_support: { ...prev.advertising_support, ...result.decisions?.advertising_support },
-        advertising_merchandising: { ...prev.advertising_merchandising, ...result.decisions?.advertising_merchandising },
-        deliveries: { ...prev.deliveries, ...result.decisions?.deliveries },
-      }));
+        if (imported.prices_home && prev.prices_home) {
+          merged.prices_home = { ...prev.prices_home, ...imported.prices_home };
+        } else if (imported.prices_home) {
+          merged.prices_home = imported.prices_home;
+        }
+        if (imported.prices_export && prev.prices_export) {
+          merged.prices_export = { ...prev.prices_export, ...imported.prices_export };
+        } else if (imported.prices_export) {
+          merged.prices_export = imported.prices_export;
+        }
+        if (imported.assembly_time && prev.assembly_time) {
+          merged.assembly_time = { ...prev.assembly_time, ...imported.assembly_time };
+        } else if (imported.assembly_time) {
+          merged.assembly_time = imported.assembly_time;
+        }
+        if (imported.implement_major_improvement && prev.implement_major_improvement) {
+          merged.implement_major_improvement = { 
+            ...prev.implement_major_improvement, 
+            ...imported.implement_major_improvement 
+          };
+        } else if (imported.implement_major_improvement) {
+          merged.implement_major_improvement = imported.implement_major_improvement;
+        }
+        if (imported.product_development && prev.product_development) {
+          merged.product_development = { ...prev.product_development, ...imported.product_development };
+        } else if (imported.product_development) {
+          merged.product_development = imported.product_development;
+        }
+        if (imported.salespeople_allocation && prev.salespeople_allocation) {
+          merged.salespeople_allocation = { ...prev.salespeople_allocation, ...imported.salespeople_allocation };
+        } else if (imported.salespeople_allocation) {
+          merged.salespeople_allocation = imported.salespeople_allocation;
+        }
+        if (imported.advertising_trade_press && prev.advertising_trade_press) {
+          merged.advertising_trade_press = { ...prev.advertising_trade_press, ...imported.advertising_trade_press };
+        } else if (imported.advertising_trade_press) {
+          merged.advertising_trade_press = imported.advertising_trade_press;
+        }
+        if (imported.advertising_support && prev.advertising_support) {
+          merged.advertising_support = { ...prev.advertising_support, ...imported.advertising_support };
+        } else if (imported.advertising_support) {
+          merged.advertising_support = imported.advertising_support;
+        }
+        if (imported.advertising_merchandising && prev.advertising_merchandising) {
+          merged.advertising_merchandising = { ...prev.advertising_merchandising, ...imported.advertising_merchandising };
+        } else if (imported.advertising_merchandising) {
+          merged.advertising_merchandising = imported.advertising_merchandising;
+        }
+        if (imported.deliveries && prev.deliveries) {
+          merged.deliveries = { ...prev.deliveries, ...imported.deliveries };
+        } else if (imported.deliveries) {
+          merged.deliveries = imported.deliveries;
+        }
+        
+        return merged;
+      });
       alert("Excel file imported successfully! Please review the values and submit.");
     } else {
       setImportError(result.error || "Failed to import Excel file");
