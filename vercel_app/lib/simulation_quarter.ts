@@ -50,6 +50,7 @@ import {
 } from "./constants";
 import type { Economy } from "./types";
 import type { Simulation } from "./simulation";
+import { calculateWorkforceMetrics } from "./simulation_enhanced";
 
 // This is a helper function that will be called from Simulation class
 export function simulateQuarterForCompany(
@@ -110,6 +111,13 @@ export function simulateQuarterForCompany(
   );
   const training_results = sim["processPersonnelTraining"](company, decisions);
   sim["processPersonnelDismissals"](company, decisions);
+  
+  // 7a. Update workforce metrics (morale, retention, productivity)
+  const workforceMetrics = calculateWorkforceMetrics(company, decisions);
+  company.workforce_morale = workforceMetrics.morale;
+  company.sales_retention_rate = workforceMetrics.retention_rate;
+  company.assembly_retention_rate = workforceMetrics.retention_rate;
+  company.productivity_multiplier = workforceMetrics.productivity;
 
   // 8. Production planning and execution
   const planned_deliveries = decisions.deliveries;
@@ -237,8 +245,10 @@ export function simulateQuarterForCompany(
     company.strike_weeks_next_quarter * (worker_hours_data.basic / 12.0);
   const effective_hours = total_hours_per_worker - strike_hours_lost;
 
+  // Apply workforce productivity multiplier
+  const productivity_multiplier = company.productivity_multiplier || 1.0;
   const assembly_hours_worked =
-    company.assembly_workers * effective_hours * Math.min(1.0, capacity_ratio);
+    company.assembly_workers * effective_hours * Math.min(1.0, capacity_ratio) * productivity_multiplier;
   const assembly_wages = assembly_hours_worked * company.assembly_wage_rate;
 
   const machinist_count = company.machines * (MACHINISTS_PER_MACHINE[shift] || 4);
