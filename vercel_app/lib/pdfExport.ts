@@ -1,11 +1,17 @@
 // PDF Export utility for Management Reports
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { ManagementReport } from "./types";
+import type { ManagementReport, CompanyState } from "./types";
 import { PRODUCTS, AREAS } from "./constants";
 import { makeKey } from "./types";
 
-export function exportReportToPDF(report: ManagementReport, companyName: string): void {
+export function exportReportToPDF(
+  report: ManagementReport, 
+  companyName: string, 
+  allCompanies?: CompanyState[],
+  playerIndex?: number,
+  boughtCompetitorInfo?: boolean
+): void {
   const doc = new jsPDF();
   
   // Header
@@ -167,16 +173,65 @@ export function exportReportToPDF(report: ManagementReport, companyName: string)
     headStyles: { fillColor: [59, 130, 246] },
   });
   
+  yPos = (doc as any).lastAutoTable.finalY + 15;
+  
+  // Competitor Information (if purchased)
+  if (boughtCompetitorInfo && allCompanies && playerIndex !== undefined) {
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 20;
+    }
+    
+    doc.setFontSize(14);
+    doc.text("Competitor Information", 14, yPos);
+    doc.setFontSize(10);
+    doc.text("Intelligence report on competitor companies (Purchased for £5,000)", 14, yPos + 7);
+    yPos += 15;
+    
+    const competitorData: string[][] = [];
+    competitorData.push(["Company", "Share Price", "Net Worth", "Cash", "Employees", "Machines"]);
+    
+    allCompanies.forEach((company, idx) => {
+      if (idx !== playerIndex) {
+        const netWorth = (company.share_price * company.shares_outstanding) + company.reserves;
+        const totalEmployees = company.salespeople + company.assembly_workers + company.machinists;
+        competitorData.push([
+          company.name || `Company ${idx + 1}`,
+          `£${company.share_price.toFixed(2)}`,
+          `£${netWorth.toLocaleString()}`,
+          `£${company.cash.toLocaleString()}`,
+          totalEmployees.toString(),
+          company.machines.toString(),
+        ]);
+      }
+    });
+    
+    if (competitorData.length > 1) {
+      autoTable(doc, {
+        startY: yPos,
+        head: [competitorData[0]],
+        body: competitorData.slice(1),
+        theme: "striped",
+        headStyles: { fillColor: [59, 130, 246] },
+      });
+    }
+  }
+  
   // Save PDF
   const fileName = `${companyName}_Year${report.year}_Q${report.quarter}.pdf`;
   doc.save(fileName);
 }
 
-export function exportAllReportsToPDF(reports: ManagementReport[]): void {
+export function exportAllReportsToPDF(
+  reports: ManagementReport[], 
+  allCompanies?: CompanyState[],
+  lastDecisions?: Array<{ buy_competitor_info?: boolean }>
+): void {
   // Export each report as a separate PDF
   reports.forEach((report, index) => {
     const companyName = report.company || `Company ${index + 1}`;
-    exportReportToPDF(report, companyName);
+    const boughtCompetitorInfo = lastDecisions?.[index]?.buy_competitor_info || false;
+    exportReportToPDF(report, companyName, allCompanies, index, boughtCompetitorInfo);
   });
 }
 
