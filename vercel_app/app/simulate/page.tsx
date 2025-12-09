@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import DecisionForm from "../../components/DecisionForm";
 import ManagementReportDisplay from "../../components/ManagementReport";
+import CompetitorInfo from "../../components/CompetitorInfo";
 import type { Decisions, ManagementReport, CompanyState, Economy } from "../../lib/types";
 import { exportAllReportsToPDF } from "../../lib/pdfExport";
 
@@ -33,6 +34,7 @@ export default function SimulatePage() {
   const [reports, setReports] = useState<ManagementReport[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [economy, setEconomy] = useState<ApiResponse["economy"] | null>(null);
+  const [lastDecisions, setLastDecisions] = useState<Decisions[] | null>(null); // Store last submitted decisions
   
   // Track current quarter (persists across API calls)
   const [currentQuarter, setCurrentQuarter] = useState(1);
@@ -193,6 +195,8 @@ export default function SimulatePage() {
         setError(data.error || "Simulation did not return valid results.");
       } else {
         setReports(data.reports);
+        // Store the decisions that were submitted for this quarter
+        setLastDecisions(decisionsArray);
         
         // Increment quarter tracking after successful quarter completion
         // Calculate next quarter
@@ -528,7 +532,7 @@ export default function SimulatePage() {
             <button
               onClick={() => {
                 if (reports) {
-                  exportAllReportsToPDF(reports);
+                  exportAllReportsToPDF(reports, simulationCompanyStates || undefined, lastDecisions || undefined);
                 }
               }}
               className="rounded-full bg-gradient-to-r from-green-500 to-emerald-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-green-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
@@ -583,10 +587,22 @@ export default function SimulatePage() {
 
           {/* Detailed Management Report for Selected Company */}
           {selectedPlayer !== null && reports[selectedPlayer] && (
-            <ManagementReportDisplay
-              report={reports[selectedPlayer]}
-              companyName={reports[selectedPlayer].company || `Company ${selectedPlayer + 1}`}
-            />
+            <>
+              <ManagementReportDisplay
+                report={reports[selectedPlayer]}
+                companyName={reports[selectedPlayer].company || `Company ${selectedPlayer + 1}`}
+              />
+              
+              {/* Competitor Information - Show if player bought competitor info */}
+              {lastDecisions && 
+               lastDecisions[selectedPlayer]?.buy_competitor_info && 
+               simulationCompanyStates && (
+                <CompetitorInfo
+                  competitors={simulationCompanyStates}
+                  playerCompanyIndex={selectedPlayer}
+                />
+              )}
+            </>
           )}
 
           {/* Button to run next quarter */}
