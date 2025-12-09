@@ -245,11 +245,14 @@ export function simulateQuarterForCompany(
     company.strike_weeks_next_quarter * (worker_hours_data.basic / 12.0);
   const effective_hours = total_hours_per_worker - strike_hours_lost;
 
-  // Apply workforce productivity multiplier
+  // Calculate assembly hours worked (workers work full hours regardless of capacity)
   const productivity_multiplier = company.productivity_multiplier || 1.0;
   const assembly_hours_worked =
-    company.assembly_workers * effective_hours * Math.min(1.0, capacity_ratio) * productivity_multiplier;
+    company.assembly_workers * effective_hours * productivity_multiplier;
   const assembly_wages = assembly_hours_worked * company.assembly_wage_rate;
+  
+  // Note: Capacity ratio is applied to production output, not hours worked
+  // Workers still work full hours, but produce less if capacity is constrained
 
   const machinist_count = company.machines * (MACHINISTS_PER_MACHINE[shift] || 4);
   const machinist_hours = cap_mach;
@@ -268,7 +271,9 @@ export function simulateQuarterForCompany(
     machine_running_cost +
     production_planning_cost;
 
-  const cost_of_sales = material_cost + assembly_wages + machinist_wages + production_overheads;
+  // Apply cost modifier from random events
+  const costModifier = (company as any).currentCostModifier || 1.0;
+  const cost_of_sales = (material_cost + assembly_wages + machinist_wages + production_overheads) * costModifier;
 
   // Operating expenses
   let ads_cost = 0;
