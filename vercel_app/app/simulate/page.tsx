@@ -19,6 +19,7 @@ type ApiResponse = {
     unemployment: number;
     cb_rate: number;
     material_price: number;
+    strength: "Strong" | "Moderate" | "Weak";
   };
   error?: string;
 };
@@ -203,6 +204,7 @@ export default function SimulatePage() {
           unemployment: data.economy?.unemployment ?? 5.0,
           cb_rate: data.economy?.cb_rate ?? 5.0,
           material_price: data.economy?.material_price ?? 100,
+          strength: data.economy?.strength ?? "Moderate",
         });
 
         // Update company states from reports
