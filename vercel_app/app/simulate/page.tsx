@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import DecisionForm from "../../components/DecisionForm";
 import ManagementReportDisplay from "../../components/ManagementReport";
-import type { Decisions, ManagementReport } from "../../lib/types";
+import type { Decisions, ManagementReport, CompanyState, Economy } from "../../lib/types";
 
 type PlayerConfig = {
   humans: number;
@@ -21,6 +21,7 @@ type ApiResponse = {
     material_price: number;
     strength: "Strong" | "Moderate" | "Weak";
   };
+  companyStates?: CompanyState[]; // Updated company states
   error?: string;
 };
 
@@ -35,6 +36,10 @@ export default function SimulatePage() {
   // Track current quarter (persists across API calls)
   const [currentQuarter, setCurrentQuarter] = useState(1);
   const [currentYear, setCurrentYear] = useState(1);
+  
+  // Store full company states for persistence
+  const [simulationCompanyStates, setSimulationCompanyStates] = useState<CompanyState[] | null>(null);
+  const [simulationEconomy, setSimulationEconomy] = useState<Economy | null>(null);
 
   // Store decisions for all players
   const [allPlayerDecisions, setAllPlayerDecisions] = useState<Map<number, Decisions>>(new Map());
@@ -174,6 +179,10 @@ export default function SimulatePage() {
         body: JSON.stringify({
           players: config.humans,
           decisions: decisionsArray,
+          companyStates: simulationCompanyStates || undefined, // Pass current states
+          economy: simulationEconomy || undefined, // Pass current economy
+          currentQuarter: currentQuarter,
+          currentYear: currentYear,
         }),
       });
 
@@ -197,17 +206,36 @@ export default function SimulatePage() {
         setCurrentQuarter(nextQuarter);
         setCurrentYear(nextYear);
         
-        setEconomy({
-          quarter: nextQuarter, // Next quarter we're preparing for
-          year: nextYear,
-          gdp: data.economy?.gdp ?? 100,
-          unemployment: data.economy?.unemployment ?? 5.0,
-          cb_rate: data.economy?.cb_rate ?? 5.0,
-          material_price: data.economy?.material_price ?? 100,
-          strength: data.economy?.strength ?? "Moderate",
-        });
+        // Store updated economy state
+        if (data.economy) {
+          const updatedEconomy: Economy = {
+            quarter: data.economy.quarter,
+            year: data.economy.year,
+            gdp: data.economy.gdp,
+            unemployment: data.economy.unemployment,
+            cb_rate: data.economy.cb_rate,
+            material_price: data.economy.material_price,
+            strength: data.economy.strength || "Moderate",
+          };
+          setSimulationEconomy(updatedEconomy);
+          
+          setEconomy({
+            quarter: nextQuarter, // Next quarter we're preparing for
+            year: nextYear,
+            gdp: data.economy.gdp,
+            unemployment: data.economy.unemployment,
+            cb_rate: data.economy.cb_rate,
+            material_price: data.economy.material_price,
+            strength: data.economy.strength || "Moderate",
+          });
+        }
+        
+        // Store updated company states for persistence
+        if (data.companyStates) {
+          setSimulationCompanyStates(data.companyStates);
+        }
 
-        // Update company states from reports
+        // Update company states from reports (for UI display)
         const newStates = new Map();
         data.reports.forEach((report, idx) => {
           if (idx < config.humans) {
