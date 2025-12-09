@@ -306,6 +306,16 @@ export default function SimulatePage() {
                   <span className="text-slate-500">Current Quarter: </span>
                   <span className="text-lg font-bold text-primary-400">Year {currentYear}, Quarter {currentQuarter}</span>
                 </div>
+                <div className="mb-2">
+                  <span className="text-slate-500">Economy Strength: </span>
+                  <span className={`text-sm font-bold ${
+                    economy.strength === "Strong" ? "text-green-400" :
+                    economy.strength === "Weak" ? "text-red-400" :
+                    "text-yellow-400"
+                  }`}>
+                    {economy.strength || "Moderate"}
+                  </span>
+                </div>
                 <div className="text-slate-500 text-xs">Preparing for: Year {economy.year}, Quarter {economy.quarter}</div>
                 <div className="mt-2 pt-2 border-t border-slate-700">
                   <div>GDP Index: {economy.gdp.toFixed(1)}</div>
