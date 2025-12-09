@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import DecisionForm from "../../components/DecisionForm";
 import ManagementReportDisplay from "../../components/ManagementReport";
 import type { Decisions, ManagementReport, CompanyState, Economy } from "../../lib/types";
+import { exportAllReportsToPDF } from "../../lib/pdfExport";
 
 type PlayerConfig = {
   humans: number;
@@ -522,6 +523,20 @@ export default function SimulatePage() {
       {/* Results Display */}
       {reports && reports.length > 0 && (
         <div className="space-y-6">
+          {/* Export PDF Button */}
+          <div className="flex justify-center">
+            <button
+              onClick={() => {
+                if (reports) {
+                  exportAllReportsToPDF(reports);
+                }
+              }}
+              className="rounded-full bg-gradient-to-r from-green-500 to-emerald-500 px-8 py-3 text-lg font-semibold text-white shadow-lg shadow-green-500/30 transition hover:-translate-y-0.5 hover:shadow-xl"
+            >
+              📄 Export All Reports as PDF
+            </button>
+          </div>
+          
           {/* All Companies Summary */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
             <h2 className="mb-4 text-lg font-semibold text-slate-100">Results Summary</h2>
