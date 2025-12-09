@@ -3,6 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { ManagementReport } from "./types";
 import { PRODUCTS, AREAS } from "./constants";
+import { makeKey } from "./types";
 
 export function exportReportToPDF(report: ManagementReport, companyName: string): void {
   const doc = new jsPDF();
@@ -57,7 +58,7 @@ export function exportReportToPDF(report: ManagementReport, companyName: string)
   salesData.push(["Product", "Area", "Sales"]);
   for (const product of PRODUCTS) {
     for (const area of AREAS) {
-      const key = `${product}|${area}`;
+      const key = makeKey(product, area);
       const sales = report.sales[key] || 0;
       if (sales > 0) {
         salesData.push([product, area, sales.toString()]);
@@ -89,7 +90,7 @@ export function exportReportToPDF(report: ManagementReport, companyName: string)
   ordersData.push(["Product", "Area", "New Orders"]);
   for (const product of PRODUCTS) {
     for (const area of AREAS) {
-      const key = `${product}|${area}`;
+      const key = makeKey(product, area);
       const orders = report.new_orders[key] || 0;
       if (orders > 0) {
         ordersData.push([product, area, orders.toString()]);
@@ -121,7 +122,7 @@ export function exportReportToPDF(report: ManagementReport, companyName: string)
   stockData.push(["Product", "Area", "Stocks", "Backlog"]);
   for (const product of PRODUCTS) {
     for (const area of AREAS) {
-      const key = `${product}|${area}`;
+      const key = makeKey(product, area);
       const stock = report.stocks[key] || 0;
       const backlog = report.backlog[key] || 0;
       if (stock > 0 || backlog > 0) {
