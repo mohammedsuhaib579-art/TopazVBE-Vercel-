@@ -4,6 +4,8 @@ import type { Product, Area } from "./constants";
 
 export type ProductAreaKey = `${Product}|${Area}`;
 
+export type EconomyStrength = "Strong" | "Moderate" | "Weak";
+
 export interface Economy {
   quarter: number;
   year: number;
@@ -11,6 +13,7 @@ export interface Economy {
   unemployment: number;
   cb_rate: number; // for next quarter
   material_price: number; // per 1000 units, for next quarter
+  strength: EconomyStrength; // Economy strength level
 }
 
 export interface ProductImprovement {
@@ -203,6 +206,38 @@ export interface CompanyState {
   opening_loan: number;
   opening_debtors: number;
   opening_creditors: number;
+  
+  // Workforce management
+  workforce_morale: number; // 0-100, affects productivity and retention
+  sales_retention_rate: number; // 0-1, probability of salespeople staying
+  assembly_retention_rate: number; // 0-1, probability of assembly workers staying
+  productivity_multiplier: number; // 0.8-1.2, affects output per worker
+  
+  // Competitor strategy (for AI companies)
+  competitor_strategy?: CompetitorStrategy;
+}
+
+export type CompetitorStrategy = 
+  | "aggressive"      // Low prices, high advertising, rapid expansion
+  | "conservative"    // High prices, low costs, steady growth
+  | "balanced"        // Moderate approach
+  | "quality_focused" // High quality, premium pricing
+  | "cost_leader";    // Minimize costs, competitive pricing
+
+export interface RandomEvent {
+  type: "market_crisis" | "regulatory_change" | "supply_shortage" | "economic_boom" | "labor_strike" | "technology_breakthrough";
+  severity: "low" | "medium" | "high";
+  description: string;
+  quarter: number;
+  year: number;
+  effects: {
+    gdp_modifier?: number;
+    material_price_modifier?: number;
+    demand_modifier?: number;
+    cost_modifier?: number;
+    affects_all_companies: boolean;
+    affected_companies?: number[]; // If not all companies
+  };
 }
 
 export interface ManagementReport {
@@ -226,7 +261,42 @@ export interface ManagementReport {
   backlog: Record<ProductAreaKey, number>;
   stocks: Record<ProductAreaKey, number>;
   product_dev_outcomes: Record<Product, string>;
+  
+  // Enhanced reporting
+  share_price_breakdown?: SharePriceBreakdown;
+  cash_flow_statement?: CashFlowStatement;
+  workforce_metrics?: WorkforceMetrics;
+  random_events?: RandomEvent[];
   [key: string]: any; // Allow additional fields
+}
+
+export interface SharePriceBreakdown {
+  base_value: number;
+  profit_contribution: number;
+  growth_contribution: number;
+  dividend_contribution: number;
+  market_position_contribution: number;
+  financial_health_contribution: number;
+  total: number;
+}
+
+export interface CashFlowStatement {
+  operating_cash_flow: number;
+  investing_cash_flow: number;
+  financing_cash_flow: number;
+  net_change_in_cash: number;
+  opening_cash: number;
+  closing_cash: number;
+  debt_service_cost: number;
+  liquidity_ratio: number;
+}
+
+export interface WorkforceMetrics {
+  morale: number;
+  retention_rate: number;
+  productivity: number;
+  turnover_cost: number;
+  training_effectiveness: number;
 }
 
 // Helper to create ProductAreaKey
