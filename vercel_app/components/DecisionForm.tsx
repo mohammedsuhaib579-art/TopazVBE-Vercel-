@@ -56,6 +56,9 @@ export default function DecisionForm({
   isRunning = false,
   allDecisionsReady = true,
 }: DecisionFormProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  
   // Initialize state with defaults
   const [decisions, setDecisions] = useState<Partial<Decisions>>({
     implement_major_improvement: { "Product 1": false, "Product 2": false, "Product 3": false },
