@@ -161,6 +161,7 @@ export async function POST(req: Request) {
       players,
       reports,
       economy: sim.economy,
+      randomEvents: sim.randomEvents || [],
     });
   } catch (error) {
     console.error("Simulation error:", error);
